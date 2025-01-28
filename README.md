@@ -2,13 +2,13 @@
   <a href="https://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
 </p>
 
-[![GitHub license](https://img.shields.io/github/license/yourusername/IntelStock.svg)](https://github.com/yourusername/IntelStock/blob/main/LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/yourusername/IntelStock.svg?style=social&label=Star)](https://github.com/yourusername/IntelStock/stargazers)
-[![GitHub issues](https://img.shields.io/github/issues/yourusername/IntelStock.svg)](https://github.com/yourusername/IntelStock/issues)
-[![GitHub forks](https://img.shields.io/github/forks/yourusername/IntelStock.svg)](https://github.com/yourusername/IntelStock/network)
-[![CircleCI](https://img.shields.io/circleci/build/github/yourusername/IntelStock/master)](https://circleci.com/gh/yourusername/IntelStock)
+[![GitHub license](https://img.shields.io/github/license/jasonn0118/IntelliStock.svg)](https://github.com/jasonn0118/IntelliStock/blob/main/LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/jasonn0118/IntelliStock.svg?style=social&label=Star)](https://github.com/jasonn0118/IntelliStock/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/jasonn0118/IntelliStock.svg)](https://github.com/jasonn0118/IntelliStock/issues)
+[![GitHub forks](https://img.shields.io/github/forks/jasonn0118/IntelliStock.svg)](https://github.com/jasonn0118/IntelliStock/network)
+[![CircleCI](https://img.shields.io/circleci/build/github/jasonn0118/IntelliStock/master)](https://circleci.com/gh/jasonn0118/IntelliStock)
 
-<p align="center">IntelStock is a comprehensive backend application built with NestJS, providing secure user authentication and robust PostgreSQL database integration.</p>
+<p align="center">IntelliStock is a comprehensive backend application built with NestJS, providing secure user authentication and robust PostgreSQL database integration.</p>
 
 ## 🚀 Features
 
