@@ -8,7 +8,7 @@
 [![GitHub forks](https://img.shields.io/github/forks/jasonn0118/IntelliStock.svg)](https://github.com/jasonn0118/IntelliStock/network)
 [![CircleCI](https://img.shields.io/circleci/build/github/jasonn0118/IntelliStock/master)](https://circleci.com/gh/jasonn0118/IntelliStock)
 
-<p align="center">IntelliStock is a comprehensive backend application built with NestJS, providing secure user authentication and robust PostgreSQL database integration.</p>
+<p align="center">IntelliStock is a comprehensive backend application built with NestJS, providing secure user authentication, robust PostgreSQL database integration, and seamless Google OAuth functionality.</p>
 
 ## 🚀 Features
 
@@ -16,11 +16,20 @@
   - Secure signup and login using JWT.
   - Password hashing with bcrypt.
   - Protected routes ensuring data privacy.
-
+  
+- **OAuth Integration:**
+  - **Google OAuth:** Allow users to authenticate using their Google accounts.
+  - **GitHub OAuth:** Enable authentication through GitHub (if implemented).
+  
 - **Database Integration:**
   - Connected NestJS backend with PostgreSQL using TypeORM's `DataSource`.
   - Configured environment variables for secure database connections.
   - Implemented health check endpoint to monitor database connectivity.
+
+## 🚚 Upcoming Features
+- **Testing & CI/CD:**
+  - Comprehensive test suites using Jest and Supertest.
+  - Automated testing workflows with GitHub Actions.
 
 ## 📈 Technologies Used
 
@@ -30,11 +39,14 @@
 - **Database:** PostgreSQL
 - **ORM:** TypeORM (using `DataSource`)
 - **Authentication:** JWT (JSON Web Tokens) with Passport.js
+- **OAuth:** Google OAuth 2.0 with Passport.js
 - **Security:** Bcrypt for password hashing
 - **Testing:** Jest, Supertest
 
 ### Tools & Services
 - **Version Control:** Git with GitHub
+- **CI/CD:** GitHub Actions
+- **Code Coverage:** Codecov
 - **API Documentation:** Swagger
 
 ## 🛠️ Installation
