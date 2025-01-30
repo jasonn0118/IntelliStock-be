@@ -17,6 +17,22 @@ export class UsersService {
     return this.userRepository.save(user);
   }
 
+  async createUserOAuth(
+    email: string,
+    provider: string,
+    oauthData: any,
+  ): Promise<User> {
+    const user = this.userRepository.create({
+      email,
+      provider,
+      fisrtName: oauthData.firstName || '',
+      lastName: oauthData.lastName || '',
+      accessToken: oauthData.accessToken || '',
+      refreshToken: oauthData.refreshToken || '',
+    });
+
+    return this.userRepository.save(user);
+  }
   async findAll(): Promise<User[]> {
     return this.userRepository.find();
   }
