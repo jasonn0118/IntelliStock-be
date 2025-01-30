@@ -1,37 +1,29 @@
+// src/users/users.controller.ts
+
 import {
   Body,
   ClassSerializerInterceptor,
   Controller,
   Get,
-  Post,
+  Param,
   UseInterceptors,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { AuthService } from './auth.service';
-import { CreateUserDto } from './dtos/create-user.dto';
 
-@Controller('auth')
+@Controller('users')
 @UseInterceptors(ClassSerializerInterceptor)
 export class UsersController {
-  constructor(
-    private usersService: UsersService,
-    private authService: AuthService,
-  ) {}
-
-  @Post('/signup')
-  async signUp(@Body() body: CreateUserDto) {
-    const user = await this.authService.signUp(body.email, body.password);
-    return user;
-  }
-
-  @Post('/signin')
-  async signIn(@Body() body: CreateUserDto) {
-    const user = await this.authService.signIn(body.email, body.password);
-    return user;
-  }
+  constructor(private usersService: UsersService) {}
 
   @Get('/:id')
-  async getUser(id: number) {
+  async getUser(@Param('id') id: number) {
     return this.usersService.findOne(id);
   }
+
+  @Get()
+  async getUsers() {
+    return this.usersService.findAll();
+  }
+
+  // Add other user-related routes as needed
 }
