@@ -60,4 +60,3 @@ jobs:
           DB_USERNAME: root
           DB_PASSWORD: root
           DATABASE_NAME: intel_stock_test
-          JWT_SECRET: your_jwt_secret # Add other necessary environment variables
