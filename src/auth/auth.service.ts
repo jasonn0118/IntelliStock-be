@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
+import { User } from 'src/users/user.entity';
 
 const saltOrRounds = 10;
 
@@ -27,8 +28,22 @@ export class AuthService {
     return user;
   }
 
-  async loginWithJwt(user: any) {
-    const payload = { username: 'john', sub: user.id };
+  async validateOauthLogin(user: any, provider: string): Promise<any> {
+    const existingUser = await this.usersService.findByEmail(user.email);
+    if (existingUser) {
+      return this.loginWithJwt(existingUser);
+    } else {
+      const newUser = await this.usersService.createUserOAuth(
+        user.email,
+        provider,
+        user,
+      );
+      return this.loginWithJwt(newUser);
+    }
+  }
+
+  async loginWithJwt(user: Partial<User>) {
+    const payload = { email: user.email, sub: user.id };
 
     return {
       access_token: this.jwtService.sign(payload),

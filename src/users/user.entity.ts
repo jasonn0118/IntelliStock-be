@@ -15,10 +15,19 @@ export class User {
   @Column()
   email: string;
 
-  @Column()
+  @Column({nullable: true})
+  provider: string;
+
+  @Column({nullable: true})
   @Exclude()
   password: string;
 
   @Column({ default: false })
   isActive: boolean;
+
+  @Column({ nullable: true })
+  accessToken: string;
+
+  @Column({ nullable: true })
+  refreshToken: string;
 }
