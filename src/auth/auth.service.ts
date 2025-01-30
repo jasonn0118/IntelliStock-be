@@ -56,7 +56,6 @@ export class AuthService {
       throw new BadRequestException('Email already in use');
     }
 
-    console.log({ password, saltOrRounds });
     const hashedPassword = await bcrypt.hash(password, saltOrRounds);
 
     return this.usersService.create(email, hashedPassword);
