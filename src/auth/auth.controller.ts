@@ -50,6 +50,19 @@ export class AuthController {
     return this.authService.loginWithJwt(req.user);
   }
 
+  @UseGuards(AuthGuard('github'))
+  @Get('/github')
+  async githubAuth() {
+    // Initiates GitHub OAuth flow
+  }
+
+  @UseGuards(AuthGuard('github'))
+  @Get('/github/callback')
+  async githubAuthRedirect(@Request() req) {
+    // Handles GitHub OAuth callback
+    return this.authService.loginWithJwt(req.user);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('/profile')
   async getProfile(@Request() req) {

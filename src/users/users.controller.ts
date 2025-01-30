@@ -24,6 +24,4 @@ export class UsersController {
   async getUsers() {
     return this.usersService.findAll();
   }
-
-  // Add other user-related routes as needed
 }
