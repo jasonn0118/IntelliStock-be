@@ -10,6 +10,22 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: postgres 
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: intel_stock_test
+        ports:
+          - 5432:5432
+        # Health check to ensure PostgreSQL is ready before running tests
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     strategy:
       matrix:
         node-version: [20.x, 21.x, 22.x]
@@ -27,5 +43,21 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Wait for PostgreSQL to be ready
+        run: |
+          for i in {1..30}; do
+            pg_isready -h localhost -p 5432 -U postgres && break
+            echo "Waiting for PostgreSQL..."
+            sleep 1
+          done
+          pg_isready -h localhost -p 5432 -U postgres
+
       - name: Run Tests
         run: npm run test -- --coverage
+        env:
+          DB_HOST: localhost
+          DATABASE_PORT: 5432
+          DB_USERNAME: root
+          DB_PASSWORD: root
+          DATABASE_NAME: intel_stock_test
+          JWT_SECRET: your_jwt_secret # Add other necessary environment variables
