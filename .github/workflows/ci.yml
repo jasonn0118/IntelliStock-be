@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }} 
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: intel_stock_test
+        ports:
+          - 5432:5432
+        # Health check to ensure PostgreSQL is ready before running tests
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    strategy:
+      matrix:
+        node-version: [20.x, 21.x, 22.x]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Wait for PostgreSQL to be ready
+        run: |
+          for i in {1..30}; do
+            pg_isready -h localhost -p 5432 -U ${{ secrets.POSTGRES_USER }} && break
+            echo "Waiting for PostgreSQL..."
+            sleep 1
+          done
+          pg_isready -h localhost -p 5432 -U ${{ secrets.POSTGRES_USER }}
+
+      - name: Run Tests
+        run: npm run test -- --coverage
+        env:
+          DB_HOST: localhost
+          DATABASE_PORT: 5432
+          DB_USERNAME: ${{ secrets.POSTGRES_USER }}
+          DB_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          DATABASE_NAME: intel_stock_test
