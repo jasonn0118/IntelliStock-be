@@ -34,9 +34,6 @@
   - Create Stock entities and related services and controllers for managing stock data.
   - Create Watchlist entities and related services and controllers to allow users to manage their watchlists.
   
-- **Testing & CI/CD:**
-  - Comprehensive test suites using Jest and Supertest.
-  - Automated testing workflows with GitHub Actions.
 
 ## 📈 Technologies Used
 
@@ -48,7 +45,7 @@
 - **Authentication:** JWT (JSON Web Tokens) with Passport.js
 - **OAuth:** Google OAuth 2.0 with Passport.js
 - **Security:** Bcrypt for password hashing
-- **Testing:** Jest, Supertest
+- **Testing:** Jest
 
 ### Tools & Services
 - **Version Control:** Git with GitHub
