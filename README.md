@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
+  <a href="https://nestjs.com/" target="_blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
 </p>
 
 [![GitHub license](https://img.shields.io/github/license/jasonn0118/IntelliStock.svg)](https://github.com/jasonn0118/IntelliStock/blob/main/LICENSE)
@@ -19,7 +19,7 @@
   
 - **OAuth Integration:**
   - **Google OAuth:** Allow users to authenticate using their Google accounts.
-  - **GitHub OAuth:** Enable authentication through GitHub (if implemented).
+  - **GitHub OAuth:** Enable authentication through GitHub.
   
 - **Database Integration:**
   - Connected NestJS backend with PostgreSQL using TypeORM's `DataSource`.
@@ -27,6 +27,13 @@
   - Implemented health check endpoint to monitor database connectivity.
 
 ## 🚚 Upcoming Features
+- **User Management:**
+  - Current user check to verify and retrieve authenticated user details.
+  
+- **Stock and Watchlist Entities:**
+  - Create Stock entities and related services and controllers for managing stock data.
+  - Create Watchlist entities and related services and controllers to allow users to manage their watchlists.
+  
 - **Testing & CI/CD:**
   - Comprehensive test suites using Jest and Supertest.
   - Automated testing workflows with GitHub Actions.
@@ -46,7 +53,6 @@
 ### Tools & Services
 - **Version Control:** Git with GitHub
 - **CI/CD:** GitHub Actions
-- **Code Coverage:** Codecov
 - **API Documentation:** Swagger
 
 ## 🛠️ Installation
