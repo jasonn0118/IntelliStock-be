@@ -61,7 +61,7 @@ jobs:
           DB_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           DATABASE_NAME: intel_stock_test
 
-```   # Notify Slack on Success
+      # Notify Slack on Success
       - name: Notify Slack on Success
         if: success()
         uses: 8398a7/action-slack@v3
