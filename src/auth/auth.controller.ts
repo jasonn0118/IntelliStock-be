@@ -7,12 +7,15 @@ import {
   UseInterceptors,
   ClassSerializerInterceptor,
   Get,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { CreateUserDto } from '../users/dtos/create-user.dto';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthGuard } from '@nestjs/passport';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { ApiBearerAuth } from '@nestjs/swagger';
 
 @Controller('auth')
 @UseInterceptors(ClassSerializerInterceptor)
@@ -26,15 +29,9 @@ export class AuthController {
   }
 
   @UseGuards(LocalAuthGuard)
-  @Post('/login')
-  async login(@Request() req) {
-    return this.authService.loginWithJwt(req.user);
-  }
-
   @Post('/signin')
-  async signIn(@Body() body: CreateUserDto) {
-    const user = await this.authService.signIn(body.email, body.password);
-    return user;
+  async signIn(@Request() req, @Body() body: CreateUserDto) {
+    return this.authService.loginWithJwt(req.user);
   }
 
   @UseGuards(AuthGuard('google'))
@@ -63,9 +60,13 @@ export class AuthController {
     return this.authService.loginWithJwt(req.user);
   }
 
+  @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
   @Get('/profile')
-  async getProfile(@Request() req) {
-    return req.user;
+  async getProfile(@CurrentUser() user) {
+    if (!user) {
+      throw new UnauthorizedException('User not authenticated');
+    }
+    return user;
   }
 }

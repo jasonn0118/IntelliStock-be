@@ -6,7 +6,11 @@ import { AuthService } from './auth.service';
 import { CreateUserDto } from '../users/dtos/create-user.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LocalAuthGuard } from './guards/local-auth.guard';
-import { ExecutionContext, Injectable } from '@nestjs/common';
+import {
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 
 // Mock AuthService
@@ -128,6 +132,11 @@ describe('AuthController', () => {
 
   describe('login', () => {
     it('should return a JWT access token', async () => {
+      const dto: CreateUserDto = {
+        email: 'signinuser@example.com',
+        password: 'password456',
+      };
+
       const mockUser = {
         id: 1,
         email: 'test@example.com',
@@ -143,7 +152,7 @@ describe('AuthController', () => {
         user: mockUser,
       };
 
-      const result = await authController.login(req);
+      const result = await authController.signIn(req, dto);
       expect(authService.loginWithJwt).toHaveBeenCalledWith(mockUser);
       expect(result).toEqual(mockJwt);
     });
@@ -152,50 +161,19 @@ describe('AuthController', () => {
       const mockUser = null;
 
       mockAuthService.loginWithJwt.mockRejectedValue(new Error('Login failed'));
-
-      const req = {
-        user: mockUser,
-      };
-
-      await expect(authController.login(req)).rejects.toThrow('Login failed');
-      expect(authService.loginWithJwt).toHaveBeenCalledWith(mockUser);
-    });
-  });
-
-  describe('signIn', () => {
-    it('should sign in the user and return the user object', async () => {
       const dto: CreateUserDto = {
         email: 'signinuser@example.com',
         password: 'password456',
       };
 
-      const mockUser = {
-        id: 5,
-        email: dto.email,
-        // other user properties
+      const req = {
+        user: mockUser,
       };
 
-      mockAuthService.signIn.mockResolvedValue(mockUser);
-
-      const result = await authController.signIn(dto);
-      expect(authService.signIn).toHaveBeenCalledWith(dto.email, dto.password);
-      expect(result).toEqual(mockUser);
-    });
-
-    it('should throw an error if sign-in fails', async () => {
-      const dto: CreateUserDto = {
-        email: 'invaliduser@example.com',
-        password: 'wrongpassword',
-      };
-
-      mockAuthService.signIn.mockRejectedValue(
-        new Error('Invalid credentials'),
+      await expect(authController.signIn(req, dto)).rejects.toThrow(
+        'Login failed',
       );
-
-      await expect(authController.signIn(dto)).rejects.toThrow(
-        'Invalid credentials',
-      );
-      expect(authService.signIn).toHaveBeenCalledWith(dto.email, dto.password);
+      expect(authService.loginWithJwt).toHaveBeenCalledWith(mockUser);
     });
   });
 
@@ -259,18 +237,19 @@ describe('AuthController', () => {
 
   describe('getProfile', () => {
     it('should return the authenticated user profile', async () => {
-      const mockUser = {
-        id: 1,
-        email: 'test@example.com',
-        // other user properties
-      };
+      const mockUser = { id: 1, email: 'test@example.com' };
 
-      const req = {
-        user: mockUser,
-      };
+      const result = await authController.getProfile(mockUser);
 
-      const result = await authController.getProfile(req);
       expect(result).toEqual(mockUser);
+    });
+
+    it('should throw UnauthorizedException if user is not provided', async () => {
+      const nullUser = null;
+
+      await expect(authController.getProfile(nullUser)).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
   });
 });
