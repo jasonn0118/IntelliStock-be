@@ -28,7 +28,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [20.x, 21.x, 22.x]
+        node-version: ['23.x']
 
     steps:
       - name: Checkout repository
@@ -60,13 +60,14 @@ jobs:
           DB_USERNAME: ${{ secrets.POSTGRES_USER }}
           DB_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           DATABASE_NAME: intel_stock_test
-```   # Notify Slack on Success
+
+      # Notify Slack on Success
       - name: Notify Slack on Success
         if: success()
         uses: 8398a7/action-slack@v3
         with:
           status: success
-          fields: repo,commit,author,action
+          fields: repo,commit,author
           custom_payload: |
             {
               "attachments": [
@@ -90,7 +91,7 @@ jobs:
         uses: 8398a7/action-slack@v3
         with:
           status: failure
-          fields: repo,commit,author,action
+          fields: repo,commit,author
           custom_payload: |
             {
               "attachments": [
