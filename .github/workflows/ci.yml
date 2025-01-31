@@ -67,7 +67,7 @@ jobs:
         uses: 8398a7/action-slack@v3
         with:
           status: success
-          fields: repo,commit,author,action
+          fields: repo,commit,author
           custom_payload: |
             {
               "attachments": [
@@ -91,7 +91,7 @@ jobs:
         uses: 8398a7/action-slack@v3
         with:
           status: failure
-          fields: repo,commit,author,action
+          fields: repo,commit,author
           custom_payload: |
             {
               "attachments": [
