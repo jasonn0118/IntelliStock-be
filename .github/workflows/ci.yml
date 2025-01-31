@@ -60,6 +60,7 @@ jobs:
           DB_USERNAME: ${{ secrets.POSTGRES_USER }}
           DB_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           DATABASE_NAME: intel_stock_test
+
 ```   # Notify Slack on Success
       - name: Notify Slack on Success
         if: success()
