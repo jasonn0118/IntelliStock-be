@@ -1,9 +1,12 @@
+import { Company } from 'src/company/company.entity';
 import { StockQuote } from 'src/stockquote/stock-quote.entity';
 import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
   OneToMany,
+  OneToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
@@ -22,40 +25,21 @@ export class Stock {
   @Column({ nullable: true })
   exchange: string; // NYSE, NASDAQ, etc.
 
-  @Column({ nullable: true })
-  sector: string; // Technology, Healthcare, etc.
-
-  @Column({ nullable: true })
-  industry: string; // Software, Biotechnology, etc.
-
-  @Column({ nullable: true })
-  currency: string; // USD, EUR, etc.
-
-  // Price data – you might choose to update these fields on a schedule
-  @Column('decimal', { nullable: true, precision: 10, scale: 2 })
-  latestPrice: number;
-
-  @Column('decimal', { nullable: true, precision: 10, scale: 2 })
-  open: number;
-
-  @Column('decimal', { nullable: true, precision: 10, scale: 2 })
-  high: number;
-
-  @Column('decimal', { nullable: true, precision: 10, scale: 2 })
-  low: number;
-
-  @Column('decimal', { nullable: true, precision: 10, scale: 2 })
-  close: number;
-
-  @Column({ nullable: true })
-  volume: number;
-
   @Column({ type: 'timestamp', nullable: true })
   lastUpdated: Date;
 
   // Relation to historical quotes
   @OneToMany(() => StockQuote, (quote) => quote.stock)
   quotes: StockQuote[];
+
+  // New foreign key column for the relationship using the company's id.
+  @Column({ nullable: true })
+  companyId: number;
+
+  // Owning side of the one-to-one relationship with Company.
+  @OneToOne(() => Company, (company) => company.stock)
+  @JoinColumn({ name: 'companyId' })
+  company: Company;
 
   @CreateDateColumn()
   createdAt: Date;

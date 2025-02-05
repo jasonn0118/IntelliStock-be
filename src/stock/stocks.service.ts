@@ -18,8 +18,7 @@ export class StocksService {
   ) {}
 
   async importStockList(): Promise<void> {
-    const url =
-      `https://financialmodelingprep.com/api/v3/stock/list?apikey=${this.configService.get<string>('FMP_API_KEY')}`;
+    const url = `https://financialmodelingprep.com/api/v3/stock/list?apikey=${this.configService.get<string>('FMP_API_KEY')}`;
     try {
       const response = await firstValueFrom(this.httpService.get(url));
       const stockList = response.data;
@@ -27,7 +26,8 @@ export class StocksService {
       const stockToSave = stockList
         .filter(
           (stock) =>
-            stock.exchangeShortName === STOCK_EXCHANGE.NASDAQ &&
+            (stock.exchangeShortName === STOCK_EXCHANGE.NASDAQ ||
+              stock.exchangeShortName === STOCK_EXCHANGE.NYSE) &&
             stock.type === STOCK_TYPE.STOCK &&
             stock.name,
         )
@@ -44,5 +44,12 @@ export class StocksService {
       this.logger.error(error.message);
       throw error;
     }
+  }
+
+  async getStock(ticker: string): Promise<Stock> {
+    return this.stockRepository.findOne({
+      where: { ticker },
+      relations: ['company'],
+    })
   }
 }
