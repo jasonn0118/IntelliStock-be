@@ -1,5 +1,5 @@
-import { Company } from 'src/company/company.entity';
-import { StockQuote } from 'src/stockquote/stock-quote.entity';
+import { Company } from '../company/company.entity';
+import { StockQuote } from '../stockquote/stock-quote.entity';
 import {
   Column,
   CreateDateColumn,

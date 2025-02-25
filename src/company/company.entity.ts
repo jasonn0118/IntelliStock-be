@@ -1,4 +1,4 @@
-import { Stock } from 'src/stock/stock.entity';
+import { Stock } from '../stock/stock.entity';
 import {
   Column,
   CreateDateColumn,
