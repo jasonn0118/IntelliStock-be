@@ -10,6 +10,11 @@ export class StocksContoller {
     await this.stocksService.importStockList();
   }
 
+  @Get('symbols')
+  async getSymbols() {
+    return this.stocksService.getAllSymbols();
+  }
+
   @Get(':ticker')
   async getStock(@Param('ticker') ticker: string) {
     return this.stocksService.getStock(ticker);
