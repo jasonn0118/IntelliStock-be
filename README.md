@@ -1,5 +1,7 @@
 <p align="center">
-  <a href="https://nestjs.com/" target="_blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
+  <a href="https://nestjs.com/" target="_blank">
+    <img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" />
+  </a>
 </p>
 
 [![GitHub license](https://img.shields.io/github/license/jasonn0118/IntelliStock.svg)](https://github.com/jasonn0118/IntelliStock/blob/main/LICENSE)
@@ -8,7 +10,9 @@
 [![GitHub forks](https://img.shields.io/github/forks/jasonn0118/IntelliStock.svg)](https://github.com/jasonn0118/IntelliStock/network)
 [![CircleCI](https://img.shields.io/circleci/build/github/jasonn0118/IntelliStock/master)](https://circleci.com/gh/jasonn0118/IntelliStock)
 
-<p align="center">IntelliStock is a comprehensive backend application built with NestJS, providing secure user authentication, robust PostgreSQL database integration, and seamless Google OAuth functionality.</p>
+<p align="center">
+  IntelliStock is a comprehensive backend application built with NestJS, providing secure user authentication, robust PostgreSQL database integration, and seamless OAuth functionality.
+</p>
 
 ## 🚀 Features
 
@@ -22,18 +26,27 @@
   - **GitHub OAuth:** Enable authentication through GitHub.
   
 - **Database Integration:**
-  - Connected NestJS backend with PostgreSQL using TypeORM's `DataSource`.
+  - Fully integrated with PostgreSQL via TypeORM.
   - Configured environment variables for secure database connections.
-  - Implemented health check endpoint to monitor database connectivity.
+  - Health check endpoints to monitor database connectivity.
+
+- **Stock Management:**
+  - Stock entity and historical stock quotes.
+  - Batch import of stock and historical data.
+  - Scheduled tasks to update daily quotes and historical data incrementally.
+  
+- **Watchlist & Portfolio:**
+  - Upcoming features include Watchlist entities and controllers.
+  - Allow users to track and manage their stock portfolios.
 
 ## 🚚 Upcoming Features
+
 - **User Management:**
   - Current user check to verify and retrieve authenticated user details.
   
-- **Stock and Watchlist Entities:**
-  - Create Stock entities and related services and controllers for managing stock data.
-  - Create Watchlist entities and related services and controllers to allow users to manage their watchlists.
-  
+- **Enhanced Stock Data:**
+  - Additional endpoints and services for managing stock and watchlist entities.
+  - Integration with external APIs for real-time and historical stock data.
 
 ## 📈 Technologies Used
 
@@ -41,7 +54,7 @@
 - **Framework:** NestJS
 - **Language:** TypeScript
 - **Database:** PostgreSQL
-- **ORM:** TypeORM (using `DataSource`)
+- **ORM:** TypeORM (using DataSource)
 - **Authentication:** JWT (JSON Web Tokens) with Passport.js
 - **OAuth:** Google OAuth 2.0 with Passport.js
 - **Security:** Bcrypt for password hashing
@@ -49,7 +62,7 @@
 
 ### Tools & Services
 - **Version Control:** Git with GitHub
-- **CI/CD:** GitHub Actions
+- **CI/CD:** GitHub Actions, CircleCI
 - **API Documentation:** Swagger
 
 ## 🛠️ Installation
