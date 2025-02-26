@@ -166,11 +166,6 @@ export class StocksService {
     });
   }
 
-  @Cron(CronExpression.EVERY_10_SECONDS)
-  async handleCron(): Promise<void> {
-    this.logger.debug('Called when the current second is 10');
-  }
-
   @Cron(CronExpression.EVERY_DAY_AT_6PM)
   async updateDailyQuotes(): Promise<void> {
     try {
