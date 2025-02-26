@@ -8,15 +8,9 @@ export class StockDataScheduler {
 
   constructor(private readonly stocksService: StocksService) {}
 
-  @Cron(CronExpression.EVERY_5_SECONDS)
-  async handleCron(): Promise<void> {
-    this.logger.debug('Called when the current second is 10');
-  }
-  // Define a cron job that runs every day at 9:20 PM.
-  @Cron('0 17 21 * * *')
+  @Cron(CronExpression.EVERY_DAY_AT_6PM)
   async updateDailyQuotes(): Promise<void> {
     try {
-      console.log('EXECUTED updateDailyQuotes');
       const tickers = await this.stocksService.getAllSymbols();
       // Split tickers into batches of 1000
       const batchSize = 1000;

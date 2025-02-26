@@ -10,12 +10,12 @@ import { StockDataScheduler } from './scheduler/stock-data.scheduler';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Stock, StockQuote, StockDataScheduler]),
+    TypeOrmModule.forFeature([Stock, StockQuote]),
     ScheduleModule.forRoot(),
     HttpModule,
   ],
   controllers: [StocksContoller],
-  providers: [StocksService],
+  providers: [StocksService, StockDataScheduler],
   exports: [StocksService],
 })
 export class StockModule {}
