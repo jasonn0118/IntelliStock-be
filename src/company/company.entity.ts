@@ -1,41 +1,42 @@
-import { Exclude } from 'class-transformer';
+import { Stock } from '../stock/stock.entity';
 import {
   Column,
   CreateDateColumn,
   Entity,
+  OneToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 
 @Entity()
-export class User {
+export class Company {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ nullable: true })
-  fisrtName: string;
+  @Column({ unique: true })
+  ticker: string;
 
   @Column({ nullable: true })
-  lastName: string;
-
-  @Column()
-  email: string;
+  name: string;
 
   @Column({ nullable: true })
-  provider: string;
+  exchange: string;
 
   @Column({ nullable: true })
-  @Exclude()
-  password: string;
-
-  @Column({ default: false })
-  isActive: boolean;
+  industry: string;
 
   @Column({ nullable: true })
-  accessToken: string;
+  sector: string;
 
   @Column({ nullable: true })
-  refreshToken: string;
+  website: string;
+
+  @Column({ nullable: true })
+  description: string;
+
+  // Inverse side of the one-to-one relationship with Stock.
+  @OneToOne(() => Stock, (stock) => stock.company)
+  stock: Stock;
 
   @CreateDateColumn()
   createdAt: Date;

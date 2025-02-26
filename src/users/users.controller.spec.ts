@@ -26,6 +26,8 @@ describe('UsersController', () => {
     isActive: true,
     provider: 'local',
     password: 'password',
+    createdAt: new Date(),
+    updatedAt: new Date(),
   };
 
   const sampleUsers: User[] = [
@@ -39,6 +41,8 @@ describe('UsersController', () => {
       isActive: true,
       provider: 'local',
       password: 'password',
+      createdAt: new Date(),
+      updatedAt: new Date(),
     },
     {
       id: 2,
@@ -50,6 +54,8 @@ describe('UsersController', () => {
       isActive: true,
       provider: 'local',
       password: 'password',
+      createdAt: new Date(),
+      updatedAt: new Date(),
     },
   ];
 
