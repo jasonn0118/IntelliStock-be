@@ -1,5 +1,5 @@
-import { Stock } from 'src/stock/stock.entity';
-import { User } from 'src/users/user.entity';
+import { Stock } from '../stock/stock.entity';
+import { User } from '../users/user.entity';
 import {
   CreateDateColumn,
   Entity,

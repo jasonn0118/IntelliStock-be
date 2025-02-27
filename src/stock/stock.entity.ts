@@ -1,4 +1,4 @@
-import { Watchlist } from 'src/watchlist/watchlist.entity';
+import { Watchlist } from '../watchlist/watchlist.entity';
 import { Company } from '../company/company.entity';
 import { StockQuote } from '../stockquote/stock-quote.entity';
 import {

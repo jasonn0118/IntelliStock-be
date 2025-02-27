@@ -1,5 +1,5 @@
 import { Exclude } from 'class-transformer';
-import { Watchlist } from 'src/watchlist/watchlist.entity';
+import { Watchlist } from '../watchlist/watchlist.entity';
 import {
   Column,
   CreateDateColumn,
@@ -40,7 +40,7 @@ export class User {
   refreshToken: string;
 
   @OneToMany(() => Watchlist, (watchlist) => watchlist.user)
-  watchListEntries: Watchlist[];
+  watchListEntries?: Watchlist[];
 
   @CreateDateColumn()
   createdAt: Date;
