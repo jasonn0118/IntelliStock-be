@@ -7,10 +7,17 @@ import { APP_PIPE } from '@nestjs/core';
 import { AuthModule } from './auth/auth.module';
 import { StockModule } from './stock/stock.module';
 import { CompanyModule } from './company/company.module';
-import { ScheduleModule } from '@nestjs/schedule';
+import { WatchlistModule } from './watchlist/watchlist.module';
 
 @Module({
-  imports: [DatabaseModule, UserModule, AuthModule, StockModule, CompanyModule],
+  imports: [
+    DatabaseModule,
+    UserModule,
+    AuthModule,
+    StockModule,
+    CompanyModule,
+    WatchlistModule,
+  ],
   controllers: [AppController],
   providers: [
     AppService,

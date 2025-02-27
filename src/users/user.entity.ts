@@ -1,8 +1,10 @@
 import { Exclude } from 'class-transformer';
+import { Watchlist } from '../watchlist/watchlist.entity';
 import {
   Column,
   CreateDateColumn,
   Entity,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
@@ -36,6 +38,9 @@ export class User {
 
   @Column({ nullable: true })
   refreshToken: string;
+
+  @OneToMany(() => Watchlist, (watchlist) => watchlist.user)
+  watchListEntries?: Watchlist[];
 
   @CreateDateColumn()
   createdAt: Date;
