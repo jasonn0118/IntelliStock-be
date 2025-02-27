@@ -31,23 +31,19 @@
   - Health check endpoints to monitor database connectivity.
 
 - **Stock Management:**
-  - Stock entity and historical stock quotes.
+  - Stock entity with historical stock quotes.
   - Batch import of stock and historical data.
   - Scheduled tasks to update daily quotes and historical data incrementally.
   
 - **Watchlist & Portfolio:**
-  - Upcoming features include Watchlist entities and controllers.
-  - Allow users to track and manage their stock portfolios.
+  - Users can add multiple stocks to their watchlist.
+  - Easily track and manage stock portfolios through upcoming Watchlist entities and endpoints.
 
 ## 🚚 Upcoming Features
 
-- **User Management:**
-  - Current user check to verify and retrieve authenticated user details.
+- **User Management Enhancements:**
+  - Improved current user endpoints and role-based access controls.
   
-- **Enhanced Stock Data:**
-  - Additional endpoints and services for managing stock and watchlist entities.
-  - Integration with external APIs for real-time and historical stock data.
-
 ## 📈 Technologies Used
 
 ### Back-End

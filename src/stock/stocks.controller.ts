@@ -1,7 +1,10 @@
 import { Controller, Get, Param, Post } from '@nestjs/common';
 import { StocksService } from './stocks.service';
+import { Serialize } from 'src/interceptors/serialize.interceptor';
+import { StockDto } from './dtos/stock.dto';
 
 @Controller('stocks')
+@Serialize(StockDto)
 export class StocksContoller {
   constructor(private readonly stocksService: StocksService) {}
 
