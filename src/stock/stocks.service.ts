@@ -7,7 +7,7 @@ import { firstValueFrom } from 'rxjs';
 import { STOCK_EXCHANGE, STOCK_TYPE } from './constants';
 import { ConfigService } from '@nestjs/config';
 import { StockQuote } from '../stockquote/stock-quote.entity';
-import { EmbeddingsService } from 'src/embedding/embeddings.service';
+import { EmbeddingsService } from '../embedding/embeddings.service';
 
 @Injectable()
 export class StocksService {

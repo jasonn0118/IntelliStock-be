@@ -69,7 +69,7 @@
 
 ### Tools & Services
 - **Version Control:** Git with GitHub
-- **CI/CD:** GitHub Actions, CircleCI
+- **CI:** GitHub Actions
 - **API Documentation:** Swagger
 - **Embedding Storage:** pgvector PostgreSQL extension
 
