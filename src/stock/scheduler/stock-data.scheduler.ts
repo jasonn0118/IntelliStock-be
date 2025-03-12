@@ -8,7 +8,8 @@ export class StockDataScheduler {
 
   constructor(private readonly stocksService: StocksService) {}
 
-  @Cron(CronExpression.EVERY_DAY_AT_6PM)
+  // @Cron(CronExpression.EVERY_DAY_AT_6PM)
+  @Cron('38 20 * * *')
   async updateDailyQuotes(): Promise<void> {
     try {
       const tickers = await this.stocksService.getAllSymbols();

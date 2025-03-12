@@ -8,6 +8,8 @@ import { AuthModule } from './auth/auth.module';
 import { StockModule } from './stock/stock.module';
 import { CompanyModule } from './company/company.module';
 import { WatchlistModule } from './watchlist/watchlist.module';
+import { DocumentModule } from './document/document.module';
+import { EmbeddingModule } from './embedding/embedding.module';
 
 @Module({
   imports: [
@@ -17,6 +19,8 @@ import { WatchlistModule } from './watchlist/watchlist.module';
     StockModule,
     CompanyModule,
     WatchlistModule,
+    DocumentModule,
+    EmbeddingModule,
   ],
   controllers: [AppController],
   providers: [

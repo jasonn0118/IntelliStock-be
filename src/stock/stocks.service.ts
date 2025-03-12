@@ -7,7 +7,7 @@ import { firstValueFrom } from 'rxjs';
 import { STOCK_EXCHANGE, STOCK_TYPE } from './constants';
 import { ConfigService } from '@nestjs/config';
 import { StockQuote } from '../stockquote/stock-quote.entity';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { EmbeddingsService } from '../embedding/embeddings.service';
 
 @Injectable()
 export class StocksService {
@@ -20,6 +20,7 @@ export class StocksService {
     private stockQuoteRepository: Repository<StockQuote>,
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
+    private readonly embeddingsService: EmbeddingsService,
   ) {}
 
   async importStockList(): Promise<void> {
@@ -94,6 +95,10 @@ export class StocksService {
         newQuote.eps = quote.eps;
         newQuote.pe = quote.pe;
         newQuote.stock = stock as Stock;
+        const embeddingText = `Symbol: ${quote.symbol}, Price: ${quote.price}, Open: ${quote.open}, DayHigh: ${quote.dayHigh}, DayLow: ${quote.dayLow}, AdjClose: ${quote.adjClose}, Volume: ${quote.volume}, AvgVolume: ${quote.avgVolume}, Change: ${quote.change}, ChangesPercentage: ${quote.changesPercentage}, YearHigh: ${quote.yearHigh}, YearLow: ${quote.yearLow}, PriceAvg50: ${quote.priceAvg50}, PriceAvg200: ${quote.priceAvg200}, EPS: ${quote.eps}, PE: ${quote.pe}`;
+
+        await this.embeddingsService.embedAndSaveDocument(embeddingText);
+
         return newQuote;
       });
 
