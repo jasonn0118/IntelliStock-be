@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import OpenAI from 'openai';
-import { Document } from 'src/document/document.entity';
+import { Document } from '../document/document.entity';
 import { Repository } from 'typeorm';
 
 @Injectable()
