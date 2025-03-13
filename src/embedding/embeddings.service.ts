@@ -52,7 +52,6 @@ export class EmbeddingsService {
   async generateResponse(prompt: string): Promise<string> {
     const relevantDocs = await this.queryDocuments(prompt);
     const context = relevantDocs.map((doc) => doc.text).join('\n');
-    console.log(context, '>>>>DOCS?');
 
     const completion = await this.openai.chat.completions.create({
       model: 'gpt-4o-mini',
