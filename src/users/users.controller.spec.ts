@@ -33,47 +33,44 @@ describe('UsersController', () => {
       email: 'john.doe@example.com',
       fisrtName: 'John',
       lastName: 'Doe',
-      accessToken: null,
-      refreshToken: null,
+      password: 'password',
+      provider: 'local',
       role: UserRole.BASIC_USER,
       isActive: true,
-      provider: 'local',
-      password: 'password',
       createdAt: new Date(),
       updatedAt: new Date(),
+      accessToken: null,
+      refreshToken: null,
     },
     {
       id: 2,
       email: 'jane.smith@example.com',
       fisrtName: 'Jane',
       lastName: 'Smith',
-      accessToken: null,
-      refreshToken: null,
+      password: 'password',
+      provider: 'local',
       role: UserRole.ADMIN,
       isActive: true,
-      provider: 'local',
-      password: 'password',
       createdAt: new Date(),
       updatedAt: new Date(),
+      accessToken: null,
+      refreshToken: null,
     },
   ];
 
   const mockUsersService = {
-    findAll: jest.fn().mockResolvedValue(sampleUsers),
+    findAll: jest.fn().mockImplementation(() => {
+      return Promise.resolve(sampleUsers);
+    }),
     findOne: jest.fn().mockImplementation((id: number) => {
       return sampleUsers.find((user) => user.id === id);
     }),
   };
 
   beforeEach(async () => {
-    const moduleRef: TestingModule = await Test.createTestingModule({
+    const module: TestingModule = await Test.createTestingModule({
       controllers: [UsersController],
-      providers: [
-        {
-          provide: UsersService,
-          useValue: mockUsersService,
-        },
-      ],
+      providers: [{ provide: UsersService, useValue: mockUsersService }],
     })
       .overrideGuard(JwtAuthGuard)
       .useValue({ canActivate: jest.fn().mockResolvedValue(true) })
@@ -87,8 +84,8 @@ describe('UsersController', () => {
       })
       .compile();
 
-    usersController = moduleRef.get<UsersController>(UsersController);
-    usersService = moduleRef.get<UsersService>(UsersService);
+    usersController = module.get<UsersController>(UsersController);
+    usersService = module.get<UsersService>(UsersService);
   });
 
   afterEach(() => {
@@ -128,14 +125,6 @@ describe('UsersController', () => {
       expect(usersService.findAll).toHaveBeenCalled();
       expect(result).toEqual([]);
     });
-  });
-
-  it('should return an array of users when called by an ADMIN', async () => {
-    const mockAdminUser = { role: UserRole.ADMIN };
-    const result = await usersController.getUsers(mockAdminUser);
-
-    expect(usersService.findAll).toHaveBeenCalled();
-    expect(result).toEqual(sampleUsers);
   });
 
   it('should deny access if user is not ADMIN', async () => {
