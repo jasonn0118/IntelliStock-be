@@ -48,9 +48,11 @@ export class AuthService {
 
   async loginWithJwt(user: Partial<User>) {
     const payload = { email: user.email, sub: user.id };
+    const token = this.jwtService.sign(payload);
 
     return {
-      access_token: this.jwtService.sign(payload),
+      access_token: token,
+      role: user.role,
     };
   }
 
@@ -63,19 +65,5 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(password, saltOrRounds);
 
     return this.usersService.create(email, hashedPassword);
-  }
-
-  async signIn(email: string, password: string) {
-    const user = await this.usersService.findByEmail(email);
-    if (!user) {
-      throw new BadRequestException('User not found');
-    }
-
-    const isPasswordMatching = await bcrypt.compare(password, user.password);
-    if (!isPasswordMatching) {
-      throw new BadRequestException('Invalid password');
-    }
-
-    return user;
   }
 }

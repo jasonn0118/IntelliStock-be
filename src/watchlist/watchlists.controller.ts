@@ -17,19 +17,16 @@ import { Serialize } from 'src/interceptors/serialize.interceptor';
 
 @Controller('watchlists')
 @Serialize(WatchlistDto)
+@UseGuards(JwtAuthGuard)
 export class WatchlistsController {
   constructor(private watchListsService: WatchlistsService) {}
 
   @Get()
-  @ApiBearerAuth('access-token')
-  @UseGuards(JwtAuthGuard)
   async getUserWatchList(@CurrentUser() user): Promise<WatchlistDto[]> {
     return this.watchListsService.getWatchList(user.id);
   }
 
   @Post()
-  @ApiBearerAuth('access-token')
-  @UseGuards(JwtAuthGuard)
   async addStockToWatchList(
     @CurrentUser() user,
     @Body() body: { ticker: string },
@@ -38,8 +35,6 @@ export class WatchlistsController {
   }
 
   @Post('remove')
-  @ApiBearerAuth('access-token')
-  @UseGuards(JwtAuthGuard)
   async removeStockFromWatchList(
     @CurrentUser() user,
     @Body() body: { ticker: string },

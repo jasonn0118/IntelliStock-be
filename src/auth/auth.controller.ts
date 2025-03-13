@@ -15,7 +15,6 @@ import { LocalAuthGuard } from './guards/local-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthGuard } from '@nestjs/passport';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { ApiBearerAuth } from '@nestjs/swagger';
 
 @Controller('auth')
 @UseInterceptors(ClassSerializerInterceptor)
@@ -34,7 +33,6 @@ export class AuthController {
     return this.authService.loginWithJwt(req.user);
   }
 
-  @UseGuards(AuthGuard('google'))
   @Get('/google')
   async googleAuth() {
     // Initiates Google OAuth flow
@@ -44,10 +42,19 @@ export class AuthController {
   @Get('/google/callback')
   async googleAuthRedirect(@Request() req) {
     // Handles Google OAuth callback
+
+    if (!req.user) {
+      throw new UnauthorizedException();
+    }
+
+    // Ensure loginWithJwt is called only once
+    if (req.user.access_token) {
+      return req.user;
+    }
+
     return this.authService.loginWithJwt(req.user);
   }
 
-  @UseGuards(AuthGuard('github'))
   @Get('/github')
   async githubAuth() {
     // Initiates GitHub OAuth flow
@@ -57,10 +64,19 @@ export class AuthController {
   @Get('/github/callback')
   async githubAuthRedirect(@Request() req) {
     // Handles GitHub OAuth callback
+
+    if (!req.user) {
+      throw new UnauthorizedException();
+    }
+
+    // Ensure loginWithJwt is called only once
+    if (req.user.access_token) {
+      return req.user;
+    }
+
     return this.authService.loginWithJwt(req.user);
   }
 
-  @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
   @Get('/profile')
   async getProfile(@CurrentUser() user) {

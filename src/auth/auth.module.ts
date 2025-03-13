@@ -1,5 +1,3 @@
-// src/auth/auth.module.ts
-
 import { Module } from '@nestjs/common';
 import { UserModule } from 'src/users/user.module';
 import { AuthService } from './auth.service';
@@ -17,13 +15,13 @@ import { GithubStrategy } from './strategies/github.strategy';
     UserModule,
     PassportModule,
     JwtModule.registerAsync({
-      imports: [ConfigModule], // Import ConfigModule to access env variables
+      imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET'),
         signOptions: {
           expiresIn:
-            configService.get<string | number>('JWT_EXPIRES_IN') || '60s',
+            configService.get<string | number>('JWT_EXPIRES_IN') || '3600s',
         },
       }),
     }),

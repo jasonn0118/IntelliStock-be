@@ -10,10 +10,12 @@ import { CompanyModule } from './company/company.module';
 import { WatchlistModule } from './watchlist/watchlist.module';
 import { DocumentModule } from './document/document.module';
 import { EmbeddingModule } from './embedding/embedding.module';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
   imports: [
     DatabaseModule,
+    ConfigModule.forRoot({ isGlobal: true }),
     UserModule,
     AuthModule,
     StockModule,

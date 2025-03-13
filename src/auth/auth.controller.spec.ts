@@ -53,7 +53,7 @@ class MockAuthGuardGithub extends AuthGuard('github') {
 
 @Injectable()
 class MockJwtAuthGuard extends JwtAuthGuard {
-  canActivate(context: ExecutionContext) {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     // Simulate JWT authentication
     const request = context.switchToHttp().getRequest();
     request.user = { id: 1, email: 'test@example.com' }; // Mock authenticated user

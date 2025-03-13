@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, VerifyCallback } from 'passport-google-oauth20';
 import { AuthService } from '../auth.service';
@@ -33,10 +33,19 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       accessToken,
     };
 
-    const validateUser = await this.authService.validateOauthLogin(
-      user,
-      'google',
-    );
-    done(null, validateUser);
+    try {
+      const validateUser = await this.authService.validateOauthLogin(
+        user,
+        'google',
+      );
+      if (!validateUser) {
+        return done(new UnauthorizedException('Invalid credentials'), null);
+      }
+
+      return done(null, validateUser);
+    } catch (error) {
+      console.error(error);
+      return done(error, null);
+    }
   }
 }

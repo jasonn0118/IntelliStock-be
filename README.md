@@ -25,6 +25,11 @@
   - **Google OAuth:** Allow users to authenticate using their Google accounts.
   - **GitHub OAuth:** Enable authentication through GitHub.
   
+- **Role-Based Access Control (RBAC):**
+  - **Admin Role:** Full access to user management and stock data.
+  - **Basic User Role:** Limited access to stock information and personal portfolio.
+  - Implemented `RoleGuard` to enforce permissions on protected endpoints.
+
 - **Database Integration:**
   - Fully integrated with PostgreSQL via TypeORM.
   - Configured environment variables for secure database connections.
@@ -48,12 +53,12 @@
 ## 🚚 Upcoming Features
 
 - **User Management Enhancements:**
-  - Improved current user endpoints and role-based access controls.
+  - Expanded role-based access controls with additional permission levels.
   
 - **Enhanced AI Financial Insights:**
   - Improve stock predictions using RAG-based retrieval of financial documents.
   - Implement financial document summarization for stock trends analysis.
-  
+
 ## 📈 Technologies Used
 
 ### Back-End
@@ -62,8 +67,9 @@
 - **Database:** PostgreSQL (with pgvector for vector embeddings)
 - **ORM:** TypeORM (using DataSource)
 - **Authentication:** JWT (JSON Web Tokens) with Passport.js
-- **OAuth:** Google OAuth 2.0 with Passport.js
+- **OAuth:** Google OAuth 2.0 & Github with Passport.js
 - **Security:** Bcrypt for password hashing
+- **Role-Based Access:** Custom RoleGuard with NestJS decorators
 - **Testing:** Jest
 - **AI Integration:** OpenAI GPT-4o-mini, Vector Embeddings
 

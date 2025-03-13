@@ -8,6 +8,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { UserRole } from './constants/user-contants';
 
 @Entity()
 export class User {
@@ -38,6 +39,9 @@ export class User {
 
   @Column({ nullable: true })
   refreshToken: string;
+
+  @Column({ type: 'enum', enum: UserRole, default: UserRole.BASIC_USER })
+  role: UserRole;
 
   @OneToMany(() => Watchlist, (watchlist) => watchlist.user)
   watchListEntries?: Watchlist[];
