@@ -1,5 +1,4 @@
 import { Exclude } from 'class-transformer';
-import { Watchlist } from '../watchlist/watchlist.entity';
 import {
   Column,
   CreateDateColumn,
@@ -8,6 +7,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { Watchlist } from '../watchlist/watchlist.entity';
 import { UserRole } from './constants/user-contants';
 
 @Entity()
@@ -31,7 +31,7 @@ export class User {
   @Exclude()
   password: string;
 
-  @Column({ default: false })
+  @Column({ default: true })
   isActive: boolean;
 
   @Column({ nullable: true })
