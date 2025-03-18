@@ -1,17 +1,17 @@
 // src/auth/auth.controller.spec.ts
 
-import { Test, TestingModule } from '@nestjs/testing';
-import { AuthController } from './auth.controller';
-import { AuthService } from './auth.service';
-import { CreateUserDto } from '../users/dtos/create-user.dto';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { LocalAuthGuard } from './guards/local-auth.guard';
 import {
   ExecutionContext,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { Test, TestingModule } from '@nestjs/testing';
+import { CreateUserDto } from '../users/dtos/create-user.dto';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { LocalAuthGuard } from './guards/local-auth.guard';
 
 // Mock AuthService
 const mockAuthService = {
@@ -131,30 +131,46 @@ describe('AuthController', () => {
   });
 
   describe('login', () => {
-    it('should return a JWT access token', async () => {
-      const dto: CreateUserDto = {
-        email: 'signinuser@example.com',
-        password: 'password456',
-      };
+    describe('login', () => {
+      it('should return a role and set a JWT access token in cookies', async () => {
+        const dto: CreateUserDto = {
+          email: 'signinuser@example.com',
+          password: 'password456',
+        };
 
-      const mockUser = {
-        id: 1,
-        email: 'test@example.com',
-      };
+        const mockUser = {
+          id: 1,
+          email: 'test@example.com',
+        };
 
-      const mockJwt = {
-        access_token: 'mockJwtToken',
-      };
+        const mockJwt = {
+          access_token: 'mockJwtToken',
+          role: 'user',
+        };
 
-      mockAuthService.loginWithJwt.mockResolvedValue(mockJwt);
+        mockAuthService.loginWithJwt.mockResolvedValue(mockJwt);
 
-      const req = {
-        user: mockUser,
-      };
+        const req = { user: mockUser };
 
-      const result = await authController.signIn(req, dto);
-      expect(authService.loginWithJwt).toHaveBeenCalledWith(mockUser);
-      expect(result).toEqual(mockJwt);
+        const res = {
+          cookie: jest.fn(),
+        };
+
+        const result = await authController.signIn(req, dto, res);
+
+        expect(authService.loginWithJwt).toHaveBeenCalledWith(mockUser);
+
+        expect(res.cookie).toHaveBeenCalledWith(
+          'access_token',
+          mockJwt.access_token,
+          {
+            httpOnly: true,
+            path: '/',
+          },
+        );
+
+        expect(result).toEqual({ role: mockJwt.role });
+      });
     });
 
     it('should handle login failure', async () => {
@@ -170,7 +186,8 @@ describe('AuthController', () => {
         user: mockUser,
       };
 
-      await expect(authController.signIn(req, dto)).rejects.toThrow(
+      const res = { cookie: jest.fn() }; // Mock response object
+      await expect(authController.signIn(req, dto, res)).rejects.toThrow(
         'Login failed',
       );
       expect(authService.loginWithJwt).toHaveBeenCalledWith(mockUser);

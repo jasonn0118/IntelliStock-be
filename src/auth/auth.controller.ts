@@ -1,20 +1,21 @@
 import {
   Body,
-  Controller,
-  Post,
-  UseGuards,
-  Request,
-  UseInterceptors,
   ClassSerializerInterceptor,
+  Controller,
   Get,
+  Post,
+  Request,
+  Res,
   UnauthorizedException,
+  UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import { AuthService } from './auth.service';
-import { CreateUserDto } from '../users/dtos/create-user.dto';
-import { LocalAuthGuard } from './guards/local-auth.guard';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthGuard } from '@nestjs/passport';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { CreateUserDto } from '../users/dtos/create-user.dto';
+import { AuthService } from './auth.service';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { LocalAuthGuard } from './guards/local-auth.guard';
 
 @Controller('auth')
 @UseInterceptors(ClassSerializerInterceptor)
@@ -29,8 +30,24 @@ export class AuthController {
 
   @UseGuards(LocalAuthGuard)
   @Post('/signin')
-  async signIn(@Request() req, @Body() body: CreateUserDto) {
-    return this.authService.loginWithJwt(req.user);
+  async signIn(
+    @Request() req,
+    @Body() body: CreateUserDto,
+    @Res({ passthrough: true }) res,
+  ) {
+    const { access_token, role } = await this.authService.loginWithJwt(
+      req.user,
+    );
+
+    res.cookie('access_token', access_token, {
+      httpOnly: true,
+      path: '/',
+      // TODO: Update later secure to true in production
+      // secure: process.env.NODE_ENV === 'production',
+      // sameSite: 'strict',
+    });
+
+    return { role };
   }
 
   @Get('/google')
@@ -75,6 +92,12 @@ export class AuthController {
     }
 
     return this.authService.loginWithJwt(req.user);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('/me')
+  async getCurrentuser(@Request() req) {
+    return { email: req.user.email, role: req.user.role };
   }
 
   @UseGuards(JwtAuthGuard)
