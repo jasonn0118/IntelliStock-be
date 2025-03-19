@@ -1,6 +1,5 @@
-// src/auth/auth.controller.spec.ts
-
 import {
+  BadRequestException,
   ExecutionContext,
   Injectable,
   UnauthorizedException,
@@ -13,20 +12,17 @@ import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 
-// Mock AuthService
 const mockAuthService = {
   signUp: jest.fn(),
   signIn: jest.fn(),
   loginWithJwt: jest.fn(),
 };
 
-// Mock Guards
 @Injectable()
 class MockLocalAuthGuard extends LocalAuthGuard {
   canActivate(context: ExecutionContext) {
-    // Simulate successful authentication
     const request = context.switchToHttp().getRequest();
-    request.user = { id: 1, email: 'test@example.com' }; // Mock user
+    request.user = { id: 1, email: 'test@example.com' };
     return true;
   }
 }
@@ -34,9 +30,8 @@ class MockLocalAuthGuard extends LocalAuthGuard {
 @Injectable()
 class MockAuthGuardGoogle extends AuthGuard('google') {
   canActivate(context: ExecutionContext) {
-    // Simulate successful OAuth authentication
     const request = context.switchToHttp().getRequest();
-    request.user = { id: 2, email: 'googleuser@example.com' }; // Mock Google user
+    request.user = { id: 2, email: 'googleuser@example.com' };
     return true;
   }
 }
@@ -44,9 +39,8 @@ class MockAuthGuardGoogle extends AuthGuard('google') {
 @Injectable()
 class MockAuthGuardGithub extends AuthGuard('github') {
   canActivate(context: ExecutionContext) {
-    // Simulate successful OAuth authentication
     const request = context.switchToHttp().getRequest();
-    request.user = { id: 3, email: 'githubuser@example.com' }; // Mock GitHub user
+    request.user = { id: 3, email: 'githubuser@example.com' };
     return true;
   }
 }
@@ -54,9 +48,8 @@ class MockAuthGuardGithub extends AuthGuard('github') {
 @Injectable()
 class MockJwtAuthGuard extends JwtAuthGuard {
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    // Simulate JWT authentication
     const request = context.switchToHttp().getRequest();
-    request.user = { id: 1, email: 'test@example.com' }; // Mock authenticated user
+    request.user = { id: 1, email: 'test@example.com' };
     return true;
   }
 }
@@ -94,39 +87,47 @@ describe('AuthController', () => {
   });
 
   describe('signUp', () => {
-    it('should create a new user and return the user object', async () => {
+    it('should create a new user and return the access token, role, and user details', async () => {
       const dto: CreateUserDto = {
         email: 'newuser@example.com',
         password: 'securepassword',
+        firstName: 'John',
+        lastName: 'Doe',
       };
 
-      const mockUser = {
-        id: 4,
-        email: dto.email,
-        // other user properties
+      const mockUserResponse = {
+        access_token: 'mockJwtToken',
+        role: 'user',
+        firstName: 'John',
+        lastName: 'Doe',
       };
 
-      mockAuthService.signUp.mockResolvedValue(mockUser);
+      mockAuthService.signUp.mockResolvedValue(mockUserResponse);
 
       const result = await authController.signUp(dto);
-      expect(authService.signUp).toHaveBeenCalledWith(dto.email, dto.password);
-      expect(result).toEqual(mockUser);
+
+      expect(authService.signUp).toHaveBeenCalledWith(dto);
+
+      expect(result).toEqual(mockUserResponse);
     });
 
-    it('should throw an error if user already exists', async () => {
+    it('should throw an error if email is already in use', async () => {
       const dto: CreateUserDto = {
         email: 'existinguser@example.com',
-        password: 'password123',
+        password: 'securepassword',
+        firstName: 'Jane',
+        lastName: 'Doe',
       };
 
       mockAuthService.signUp.mockRejectedValue(
-        new Error('User already exists'),
+        new BadRequestException('Email already in use'),
       );
 
       await expect(authController.signUp(dto)).rejects.toThrow(
-        'User already exists',
+        BadRequestException,
       );
-      expect(authService.signUp).toHaveBeenCalledWith(dto.email, dto.password);
+
+      expect(authService.signUp).toHaveBeenCalledWith(dto);
     });
   });
 

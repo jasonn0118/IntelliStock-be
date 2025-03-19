@@ -3,10 +3,11 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
-import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcrypt';
+import { CreateUserDto } from 'src/users/dtos/create-user.dto';
 import { User } from 'src/users/user.entity';
+import { UsersService } from '../users/users.service';
 
 const saltOrRounds = 10;
 
@@ -53,17 +54,39 @@ export class AuthService {
     return {
       access_token: token,
       role: user.role,
+      firstName: user.firstName,
+      lastName: user.lastName,
     };
   }
 
-  async signUp(email: string, password: string) {
+  async signUp(createUserDto: CreateUserDto) {
+    const { email, password, firstName, lastName } = createUserDto;
+
     const existingUser = await this.usersService.findByEmail(email);
+
     if (existingUser) {
       throw new BadRequestException('Email already in use');
     }
 
     const hashedPassword = await bcrypt.hash(password, saltOrRounds);
 
-    return this.usersService.create(email, hashedPassword);
+    const newUser = await this.usersService.create({
+      email,
+      password: hashedPassword,
+      firstName,
+      lastName,
+    });
+
+    const access_token = this.jwtService.sign({
+      sub: newUser.id,
+      email: newUser.email,
+    });
+
+    return {
+      access_token,
+      role: newUser.role,
+      firstName: newUser.firstName,
+      lastName: newUser.lastName,
+    };
   }
 }
