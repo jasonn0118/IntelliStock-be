@@ -1,11 +1,11 @@
+import { ExecutionContext } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { UserRole } from './constants/user-contants';
+import { RoleGuard } from './guards/role.guard';
+import { User } from './user.entity';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
-import { User } from './user.entity';
-import { UserRole } from './constants/user-contants';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RoleGuard } from './guards/role.guard';
-import { ExecutionContext } from '@nestjs/common';
 
 describe('UsersController', () => {
   let usersController: UsersController;
@@ -15,7 +15,7 @@ describe('UsersController', () => {
   const sampleUser: User = {
     id: 1,
     email: 'john.doe@example.com',
-    fisrtName: 'John',
+    firstName: 'John',
     lastName: 'Doe',
     accessToken: null,
     refreshToken: null,
@@ -31,7 +31,7 @@ describe('UsersController', () => {
     {
       id: 1,
       email: 'john.doe@example.com',
-      fisrtName: 'John',
+      firstName: 'John',
       lastName: 'Doe',
       password: 'password',
       provider: 'local',
@@ -45,7 +45,7 @@ describe('UsersController', () => {
     {
       id: 2,
       email: 'jane.smith@example.com',
-      fisrtName: 'Jane',
+      firstName: 'Jane',
       lastName: 'Smith',
       password: 'password',
       provider: 'local',

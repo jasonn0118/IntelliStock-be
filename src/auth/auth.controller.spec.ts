@@ -1,6 +1,7 @@
 // src/auth/auth.controller.spec.ts
 
 import {
+  BadRequestException,
   ExecutionContext,
   Injectable,
   UnauthorizedException,
@@ -94,39 +95,47 @@ describe('AuthController', () => {
   });
 
   describe('signUp', () => {
-    it('should create a new user and return the user object', async () => {
+    it('should create a new user and return the access token, role, and user details', async () => {
       const dto: CreateUserDto = {
         email: 'newuser@example.com',
         password: 'securepassword',
+        firstName: 'John',
+        lastName: 'Doe',
       };
 
-      const mockUser = {
-        id: 4,
-        email: dto.email,
-        // other user properties
+      const mockUserResponse = {
+        access_token: 'mockJwtToken',
+        role: 'user',
+        firstName: 'John',
+        lastName: 'Doe',
       };
 
-      mockAuthService.signUp.mockResolvedValue(mockUser);
+      mockAuthService.signUp.mockResolvedValue(mockUserResponse);
 
       const result = await authController.signUp(dto);
-      expect(authService.signUp).toHaveBeenCalledWith(dto.email, dto.password);
-      expect(result).toEqual(mockUser);
+
+      expect(authService.signUp).toHaveBeenCalledWith(dto);
+
+      expect(result).toEqual(mockUserResponse);
     });
 
-    it('should throw an error if user already exists', async () => {
+    it('should throw an error if email is already in use', async () => {
       const dto: CreateUserDto = {
         email: 'existinguser@example.com',
-        password: 'password123',
+        password: 'securepassword',
+        firstName: 'Jane',
+        lastName: 'Doe',
       };
 
       mockAuthService.signUp.mockRejectedValue(
-        new Error('User already exists'),
+        new BadRequestException('Email already in use'),
       );
 
       await expect(authController.signUp(dto)).rejects.toThrow(
-        'User already exists',
+        BadRequestException,
       );
-      expect(authService.signUp).toHaveBeenCalledWith(dto.email, dto.password);
+
+      expect(authService.signUp).toHaveBeenCalledWith(dto);
     });
   });
 

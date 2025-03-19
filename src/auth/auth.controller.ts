@@ -11,6 +11,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { Response } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CreateUserDto } from '../users/dtos/create-user.dto';
 import { AuthService } from './auth.service';
@@ -24,7 +25,7 @@ export class AuthController {
 
   @Post('/signup')
   async signUp(@Body() body: CreateUserDto) {
-    const user = await this.authService.signUp(body.email, body.password);
+    const user = await this.authService.signUp(body);
     return user;
   }
 
@@ -35,9 +36,8 @@ export class AuthController {
     @Body() body: CreateUserDto,
     @Res({ passthrough: true }) res,
   ) {
-    const { access_token, role } = await this.authService.loginWithJwt(
-      req.user,
-    );
+    const { access_token, role, firstName, lastName } =
+      await this.authService.loginWithJwt(req.user);
 
     res.cookie('access_token', access_token, {
       httpOnly: true,
@@ -47,7 +47,14 @@ export class AuthController {
       // sameSite: 'strict',
     });
 
-    return { role };
+    return { role, firstName, lastName };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('/signout')
+  async signOut(@Res({ passthrough: true }) res: Response) {
+    res.clearCookie('access_token');
+    return { message: 'success' };
   }
 
   @Get('/google')
@@ -97,7 +104,12 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get('/me')
   async getCurrentuser(@Request() req) {
-    return { email: req.user.email, role: req.user.role };
+    return {
+      email: req.user.email,
+      role: req.user.role,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+    };
   }
 
   @UseGuards(JwtAuthGuard)
