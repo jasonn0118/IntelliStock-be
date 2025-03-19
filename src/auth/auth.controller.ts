@@ -24,9 +24,30 @@ export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Post('/signup')
-  async signUp(@Body() body: CreateUserDto) {
-    const user = await this.authService.signUp(body);
-    return user;
+  async signUp(
+    @Body() body: CreateUserDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    try {
+      const { access_token, role, firstName, lastName } =
+        await this.authService.signUp(body);
+
+      res.cookie('access_token', access_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+      });
+
+      return {
+        message: 'User registered successfully',
+        firstName,
+        lastName,
+        role,
+      };
+    } catch (error) {
+      throw new UnauthorizedException(error.message);
+    }
   }
 
   @UseGuards(LocalAuthGuard)
@@ -58,47 +79,61 @@ export class AuthController {
   }
 
   @Get('/google')
+  @UseGuards(AuthGuard('google'))
   async googleAuth() {
     // Initiates Google OAuth flow
   }
 
   @UseGuards(AuthGuard('google'))
   @Get('/google/callback')
-  async googleAuthRedirect(@Request() req) {
+  async googleAuthRedirect(@Request() req, @Res() res: Response) {
     // Handles Google OAuth callback
 
     if (!req.user) {
       throw new UnauthorizedException();
     }
 
-    // Ensure loginWithJwt is called only once
-    if (req.user.access_token) {
-      return req.user;
-    }
+    const access_token =
+      req.user.access_token ||
+      (await this.authService.loginWithJwt(req.user)).access_token;
 
-    return this.authService.loginWithJwt(req.user);
+    res.cookie('access_token', access_token, {
+      httpOnly: true,
+      // secure: process.env.NODE_ENV === 'production',
+      // sameSite: 'lax',
+      path: '/',
+    });
+
+    return res.redirect('http://localhost:3001');
   }
 
   @Get('/github')
+  @UseGuards(AuthGuard('github'))
   async githubAuth() {
     // Initiates GitHub OAuth flow
   }
 
   @UseGuards(AuthGuard('github'))
   @Get('/github/callback')
-  async githubAuthRedirect(@Request() req) {
+  async githubAuthRedirect(@Request() req, @Res() res: Response) {
     // Handles GitHub OAuth callback
 
     if (!req.user) {
       throw new UnauthorizedException();
     }
 
-    // Ensure loginWithJwt is called only once
-    if (req.user.access_token) {
-      return req.user;
-    }
+    const access_token =
+      req.user.access_token ||
+      (await this.authService.loginWithJwt(req.user)).access_token;
 
-    return this.authService.loginWithJwt(req.user);
+    res.cookie('access_token', access_token, {
+      httpOnly: true,
+      // secure: process.env.NODE_ENV === 'production',
+      // sameSite: 'lax',
+      path: '/',
+    });
+
+    return res.redirect('http://localhost:3001');
   }
 
   @UseGuards(JwtAuthGuard)
