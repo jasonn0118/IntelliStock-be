@@ -1,11 +1,11 @@
 import {
-  BadRequestException,
   ExecutionContext,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Test, TestingModule } from '@nestjs/testing';
+import { Response } from 'express';
 import { CreateUserDto } from '../users/dtos/create-user.dto';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -87,7 +87,7 @@ describe('AuthController', () => {
   });
 
   describe('signUp', () => {
-    it('should create a new user and return the access token, role, and user details', async () => {
+    it('should create a new user, set cookie, and return user details', async () => {
       const dto: CreateUserDto = {
         email: 'newuser@example.com',
         password: 'securepassword',
@@ -104,14 +104,36 @@ describe('AuthController', () => {
 
       mockAuthService.signUp.mockResolvedValue(mockUserResponse);
 
-      const result = await authController.signUp(dto);
+      // ✅ Fix: Fully mock the Express Response object
+      const res = {
+        cookie: jest.fn(),
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      } as Partial<Response>;
 
+      const result = await authController.signUp(dto, res as Response);
+
+      // ✅ Ensure authService.signUp() was called with correct DTO
       expect(authService.signUp).toHaveBeenCalledWith(dto);
 
-      expect(result).toEqual(mockUserResponse);
+      // ✅ Ensure cookie is set correctly
+      expect(res.cookie).toHaveBeenCalledWith('access_token', 'mockJwtToken', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+      });
+
+      // ✅ Ensure structured response is returned
+      expect(result).toEqual({
+        message: 'User registered successfully',
+        firstName: 'John',
+        lastName: 'Doe',
+        role: 'user',
+      });
     });
 
-    it('should throw an error if email is already in use', async () => {
+    it('should throw an error if signup fails', async () => {
       const dto: CreateUserDto = {
         email: 'existinguser@example.com',
         password: 'securepassword',
@@ -120,14 +142,25 @@ describe('AuthController', () => {
       };
 
       mockAuthService.signUp.mockRejectedValue(
-        new BadRequestException('Email already in use'),
+        new UnauthorizedException('Signup failed'),
       );
 
-      await expect(authController.signUp(dto)).rejects.toThrow(
-        BadRequestException,
+      const res = {
+        cookie: jest.fn(),
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      } as Partial<Response>;
+
+      // ✅ Expect the function to throw UnauthorizedException
+      await expect(authController.signUp(dto, res as Response)).rejects.toThrow(
+        UnauthorizedException,
       );
 
+      // ✅ Ensure authService.signUp() was called with correct DTO
       expect(authService.signUp).toHaveBeenCalledWith(dto);
+
+      // ✅ Ensure cookie was NOT set due to error
+      expect(res.cookie).not.toHaveBeenCalled();
     });
   });
 
@@ -197,59 +230,97 @@ describe('AuthController', () => {
 
   describe('Google OAuth', () => {
     it('should initiate Google OAuth flow', async () => {
-      // Since the route is guarded and redirects, we can test that the method exists and is callable
       const result = await authController.googleAuth();
       expect(result).toBeUndefined();
     });
 
-    it('should handle Google OAuth callback and return JWT', async () => {
+    it('should handle Google OAuth callback and set JWT if `access_token` is already present in req.user', async () => {
       const mockGoogleUser = {
         id: 2,
         email: 'googleuser@example.com',
-      };
-
-      const mockJwt = {
         access_token: 'googleJwtToken',
       };
 
-      mockAuthService.loginWithJwt.mockResolvedValue(mockJwt);
+      const req = { user: mockGoogleUser };
+      const res = {
+        cookie: jest.fn(),
+        redirect: jest.fn(),
+      } as Partial<Response>;
 
-      const req = {
-        user: mockGoogleUser,
-      };
+      await authController.googleAuthRedirect(req, res as Response);
 
-      const result = await authController.googleAuthRedirect(req);
-      expect(authService.loginWithJwt).toHaveBeenCalledWith(mockGoogleUser);
-      expect(result).toEqual(mockJwt);
+      expect(res.cookie).toHaveBeenCalledWith(
+        'access_token',
+        'googleJwtToken',
+        {
+          httpOnly: true,
+          path: '/',
+        },
+      );
+      expect(res.redirect).toHaveBeenCalledWith('http://localhost:3001');
+      expect(authService.loginWithJwt).not.toHaveBeenCalled();
+    });
+
+    it('should throw an error if user is not authenticated', async () => {
+      const req = { user: null };
+      const res = {
+        cookie: jest.fn(),
+        redirect: jest.fn(),
+      } as Partial<Response>;
+
+      await expect(
+        authController.googleAuthRedirect(req, res as Response),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(res.cookie).not.toHaveBeenCalled();
+      expect(res.redirect).not.toHaveBeenCalled();
     });
   });
 
   describe('GitHub OAuth', () => {
     it('should initiate GitHub OAuth flow', async () => {
-      // Since the route is guarded and redirects, we can test that the method exists and is callable
       const result = await authController.githubAuth();
       expect(result).toBeUndefined();
     });
 
-    it('should handle GitHub OAuth callback and return JWT', async () => {
-      const mockGithubUser = {
+    it('should handle GitHub OAuth callback and set JWT if `access_token` is already present in req.user', async () => {
+      const mockGitHubUser = {
         id: 3,
         email: 'githubuser@example.com',
-      };
-
-      const mockJwt = {
         access_token: 'githubJwtToken',
       };
 
-      mockAuthService.loginWithJwt.mockResolvedValue(mockJwt);
+      const req = { user: mockGitHubUser };
+      const res = {
+        cookie: jest.fn(),
+        redirect: jest.fn(),
+      } as Partial<Response>;
 
-      const req = {
-        user: mockGithubUser,
-      };
+      await authController.githubAuthRedirect(req, res as Response);
 
-      const result = await authController.githubAuthRedirect(req);
-      expect(authService.loginWithJwt).toHaveBeenCalledWith(mockGithubUser);
-      expect(result).toEqual(mockJwt);
+      expect(res.cookie).toHaveBeenCalledWith(
+        'access_token',
+        'githubJwtToken',
+        {
+          httpOnly: true,
+          path: '/',
+        },
+      );
+      expect(res.redirect).toHaveBeenCalledWith('http://localhost:3001');
+      expect(authService.loginWithJwt).not.toHaveBeenCalled();
+    });
+
+    it('should throw an error if user is not authenticated', async () => {
+      const req = { user: null }; // No user object
+      const res = {
+        cookie: jest.fn(),
+        redirect: jest.fn(),
+      } as Partial<Response>;
+
+      await expect(
+        authController.githubAuthRedirect(req, res as Response),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(res.cookie).not.toHaveBeenCalled();
+      expect(res.redirect).not.toHaveBeenCalled();
     });
   });
 
