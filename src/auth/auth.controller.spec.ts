@@ -1,5 +1,3 @@
-// src/auth/auth.controller.spec.ts
-
 import {
   BadRequestException,
   ExecutionContext,
@@ -14,20 +12,17 @@ import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 
-// Mock AuthService
 const mockAuthService = {
   signUp: jest.fn(),
   signIn: jest.fn(),
   loginWithJwt: jest.fn(),
 };
 
-// Mock Guards
 @Injectable()
 class MockLocalAuthGuard extends LocalAuthGuard {
   canActivate(context: ExecutionContext) {
-    // Simulate successful authentication
     const request = context.switchToHttp().getRequest();
-    request.user = { id: 1, email: 'test@example.com' }; // Mock user
+    request.user = { id: 1, email: 'test@example.com' };
     return true;
   }
 }
@@ -35,9 +30,8 @@ class MockLocalAuthGuard extends LocalAuthGuard {
 @Injectable()
 class MockAuthGuardGoogle extends AuthGuard('google') {
   canActivate(context: ExecutionContext) {
-    // Simulate successful OAuth authentication
     const request = context.switchToHttp().getRequest();
-    request.user = { id: 2, email: 'googleuser@example.com' }; // Mock Google user
+    request.user = { id: 2, email: 'googleuser@example.com' };
     return true;
   }
 }
@@ -45,9 +39,8 @@ class MockAuthGuardGoogle extends AuthGuard('google') {
 @Injectable()
 class MockAuthGuardGithub extends AuthGuard('github') {
   canActivate(context: ExecutionContext) {
-    // Simulate successful OAuth authentication
     const request = context.switchToHttp().getRequest();
-    request.user = { id: 3, email: 'githubuser@example.com' }; // Mock GitHub user
+    request.user = { id: 3, email: 'githubuser@example.com' };
     return true;
   }
 }
@@ -55,9 +48,8 @@ class MockAuthGuardGithub extends AuthGuard('github') {
 @Injectable()
 class MockJwtAuthGuard extends JwtAuthGuard {
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    // Simulate JWT authentication
     const request = context.switchToHttp().getRequest();
-    request.user = { id: 1, email: 'test@example.com' }; // Mock authenticated user
+    request.user = { id: 1, email: 'test@example.com' };
     return true;
   }
 }
