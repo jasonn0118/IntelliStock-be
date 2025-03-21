@@ -1,13 +1,13 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Stock } from './stock.entity';
-import { Repository } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
-import { STOCK_EXCHANGE, STOCK_TYPE } from './constants';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { StockQuote } from '../stockquote/stock-quote.entity';
+import { InjectRepository } from '@nestjs/typeorm';
+import { firstValueFrom } from 'rxjs';
+import { Repository } from 'typeorm';
 import { EmbeddingsService } from '../embedding/embeddings.service';
+import { StockQuote } from '../stockquote/stock-quote.entity';
+import { STOCK_EXCHANGE, STOCK_TYPE } from './constants';
+import { Stock } from './stock.entity';
 
 @Injectable()
 export class StocksService {
@@ -32,8 +32,7 @@ export class StocksService {
       const stockToSave = stockList
         .filter(
           (stock) =>
-            (stock.exchangeShortName === STOCK_EXCHANGE.NASDAQ ||
-              stock.exchangeShortName === STOCK_EXCHANGE.NYSE) &&
+            stock.exchangeShortName === STOCK_EXCHANGE.NASDAQ &&
             stock.type === STOCK_TYPE.STOCK &&
             stock.name,
         )
@@ -52,64 +51,24 @@ export class StocksService {
     }
   }
 
-  async fetchAndSaveDailyQuotes(tickers: string[]): Promise<void> {
+  async fetchAndSaveDailyQuotes(): Promise<void> {
     try {
-      const symbolList = tickers.join(',');
-      const url = `${this.baseUrl}/quote/${symbolList}?apikey=${this.configService.get<string>('FMP_API_KEY')}`;
+      const url = `${this.baseUrl}/symbol/NASDAQ?apikey=${this.configService.get<string>('FMP_API_KEY')}`;
       const response = await firstValueFrom(this.httpService.get(url));
-      const quotes = response.data;
+      const allQuotes = response.data;
 
-      const quotesToSavePromises = quotes.map(async (quote) => {
-        // Convert timestamp to a Date object (if needed, multiply by 1000)
-        const quoteDate = new Date(quote.timestamp * 1000);
-        // Await the async call to find an existing quote
-        const existingQuote = await this.stockQuoteRepository.findOne({
-          where: { date: quoteDate, stock: { ticker: quote.symbol } },
-        });
-        if (existingQuote) {
-          return null;
-        }
+      const batchSize = 200;
+      const quoteBatches = this.splitIntoBatches(allQuotes, batchSize);
 
-        const stock = await this.stockRepository.findOne({
-          where: { ticker: quote.symbol },
-        });
-        if (!stock) {
-          return null;
-        }
+      for (const batch of quoteBatches) {
+        await this.processQuoteBatch(batch);
+      }
 
-        const newQuote = new StockQuote();
-        newQuote.date = quoteDate;
-        newQuote.open = quote.open;
-        newQuote.dayHigh = quote.dayHigh;
-        newQuote.dayLow = quote.dayLow;
-        newQuote.price = quote.price;
-        newQuote.adjClose = quote.adjClose;
-        newQuote.volume = quote.volume;
-        newQuote.avgVolume = quote.avgVolume;
-        newQuote.change = quote.change;
-        newQuote.changesPercentage = quote.changesPercentage;
-        newQuote.yearHigh = quote.yearHigh;
-        newQuote.yearLow = quote.yearLow;
-        newQuote.priceAvg50 = quote.priceAvg50;
-        newQuote.priceAvg200 = quote.priceAvg200;
-        newQuote.eps = quote.eps;
-        newQuote.pe = quote.pe;
-        newQuote.stock = stock as Stock;
-        const embeddingText = `Symbol: ${quote.symbol}, Price: ${quote.price}, Open: ${quote.open}, DayHigh: ${quote.dayHigh}, DayLow: ${quote.dayLow}, AdjClose: ${quote.adjClose}, Volume: ${quote.volume}, AvgVolume: ${quote.avgVolume}, Change: ${quote.change}, ChangesPercentage: ${quote.changesPercentage}, YearHigh: ${quote.yearHigh}, YearLow: ${quote.yearLow}, PriceAvg50: ${quote.priceAvg50}, PriceAvg200: ${quote.priceAvg200}, EPS: ${quote.eps}, PE: ${quote.pe}`;
-
-        await this.embeddingsService.embedAndSaveDocument(embeddingText);
-
-        return newQuote;
-      });
-
-      const quotesToSave = (await Promise.all(quotesToSavePromises)).filter(
-        (q) => q !== null,
-      );
-
-      await this.stockQuoteRepository.save(quotesToSave);
-      this.logger.log('Daily quotes saved');
+      this.logger.log('All daily quotes processed successfully in batches.');
     } catch (error) {
-      this.logger.error(error.message);
+      this.logger.error(
+        `Error fetching and saving daily quotes: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -122,7 +81,6 @@ export class StocksService {
       // Assuming the response data structure contains "historicalStockList"
       const historicalData = response.data.historicalStockList;
 
-      // Use flatMap to create a single array of StockQuote objects
       const quotesToSavePromises = historicalData.flatMap(async (data) => {
         const stock = await this.stockRepository.findOne({
           where: { ticker: data.symbol },
@@ -132,7 +90,7 @@ export class StocksService {
         }
         return data.historical.map((quote) => {
           const newQuote = new StockQuote();
-          newQuote.date = new Date(quote.date); // converting string date to Date object
+          newQuote.date = new Date(quote.date);
           newQuote.open = quote.open;
           newQuote.dayHigh = quote.high;
           newQuote.dayLow = quote.dayLow;
@@ -150,12 +108,36 @@ export class StocksService {
       const quotesToSave = (await Promise.all(quotesToSavePromises)).filter(
         (q) => q.length > 0,
       );
-      // Bulk save all quotes
+
       await this.stockQuoteRepository.save(quotesToSave);
     } catch (error) {
       this.logger.error(error.message);
       throw error;
     }
+  }
+
+  async getTopStocksByMarketCap(): Promise<StockQuote[]> {
+    return this.stockQuoteRepository
+      .createQueryBuilder('stock_quote')
+      .leftJoinAndSelect('stock_quote.stock', 'stock')
+      .where("stock_quote.date = (CURRENT_DATE - INTERVAL '1 day')")
+      .andWhere('stock_quote.marketCap IS NOT NULL')
+      .orderBy('stock_quote.marketCap', 'DESC')
+      .limit(10)
+      .getMany();
+  }
+
+  async getTopGainers() {
+    return this.stockQuoteRepository
+      .createQueryBuilder('sq')
+      .innerJoinAndSelect('sq.stock', 's')
+      .where("sq.date = (CURRENT_DATE - INTERVAL '1 day')")
+      .andWhere('sq.marketCap > 100000000') // ✅ Market Cap > $100M
+      .andWhere('sq.price > 5') // ✅ Stock price > $5
+      .andWhere('sq.avgVolume > 100000') // ✅ Avg Volume > 100K
+      .orderBy('sq.changesPercentage', 'DESC') // ✅ Sort by top gainers
+      .limit(10)
+      .getMany();
   }
 
   async getAllSymbols(): Promise<string[]> {
@@ -169,5 +151,103 @@ export class StocksService {
       where: { ticker },
       relations: ['company'],
     });
+  }
+
+  private splitIntoBatches<T>(array: T[], batchSize: number): T[][] {
+    const batches = [];
+    for (let i = 0; i < array.length; i += batchSize) {
+      batches.push(array.slice(i, i + batchSize));
+    }
+    return batches;
+  }
+
+  private async processQuoteBatch(quotes: any[]): Promise<void> {
+    const quotesToSave: StockQuote[] = [];
+
+    for (const quote of quotes) {
+      const quoteDate = quote.timestamp
+        ? new Date(quote.timestamp * 1000)
+        : null;
+      if (!quoteDate || isNaN(quoteDate.getTime())) {
+        this.logger.warn(
+          `Invalid timestamp for ${quote.symbol}: ${quote.timestamp}`,
+        );
+        continue;
+      }
+
+      const existingQuote = await this.stockQuoteRepository.findOne({
+        where: { date: quoteDate, stock: { ticker: quote.symbol } },
+      });
+
+      if (existingQuote) continue;
+
+      const stock = await this.stockRepository.findOne({
+        where: { ticker: quote.symbol },
+      });
+
+      if (!stock) continue;
+
+      const newQuote = new StockQuote();
+      newQuote.date = quoteDate;
+      newQuote.open = quote.open;
+      newQuote.dayHigh = quote.dayHigh;
+      newQuote.dayLow = quote.dayLow;
+      newQuote.price = quote.price;
+      newQuote.adjClose = quote.adjClose;
+      newQuote.volume = quote.volume;
+      newQuote.avgVolume = quote.avgVolume;
+      newQuote.change = quote.change;
+      newQuote.changesPercentage = quote.changesPercentage;
+      newQuote.yearHigh = quote.yearHigh;
+      newQuote.yearLow = quote.yearLow;
+      newQuote.priceAvg50 = quote.priceAvg50;
+      newQuote.priceAvg200 = quote.priceAvg200;
+      newQuote.eps = quote.eps;
+      newQuote.pe = quote.pe;
+      newQuote.marketCap = quote.marketCap;
+      newQuote.previousClose = quote.previousClose;
+      newQuote.earningsAnnouncement =
+        quote.earningsAnnouncement &&
+        !isNaN(new Date(quote.earningsAnnouncement).getTime())
+          ? new Date(quote.earningsAnnouncement)
+          : null;
+      newQuote.sharesOutstanding = quote.sharesOutstanding;
+      newQuote.timestamp = quoteDate;
+      newQuote.stock = stock;
+
+      const embeddingText = [
+        `Symbol: ${quote.symbol || 'N/A'}`,
+        `Date: ${quoteDate.toISOString()}`,
+        `Price: ${quote.price ?? 'N/A'}`,
+        `Open: ${quote.open ?? 'N/A'}`,
+        `DayHigh: ${quote.dayHigh ?? 'N/A'}`,
+        `DayLow: ${quote.dayLow ?? 'N/A'}`,
+        `AdjClose: ${quote.adjClose ?? 'N/A'}`,
+        `Volume: ${quote.volume ?? 'N/A'}`,
+        `AvgVolume: ${quote.avgVolume ?? 'N/A'}`,
+        `Change: ${quote.change ?? 'N/A'}`,
+        `ChangesPercentage: ${quote.changesPercentage ?? 'N/A'}`,
+        `YearHigh: ${quote.yearHigh ?? 'N/A'}`,
+        `YearLow: ${quote.yearLow ?? 'N/A'}`,
+        `PriceAvg50: ${quote.priceAvg50 ?? 'N/A'}`,
+        `PriceAvg200: ${quote.priceAvg200 ?? 'N/A'}`,
+        `EPS: ${quote.eps ?? 'N/A'}`,
+        `PE: ${quote.pe ?? 'N/A'}`,
+        `MarketCap: ${quote.marketCap ?? 'N/A'}`,
+        `PreviousClose: ${quote.previousClose ?? 'N/A'}`,
+        `EarningsAnnouncement: ${newQuote.earningsAnnouncement?.toISOString() ?? 'N/A'}`,
+        `SharesOutstanding: ${quote.sharesOutstanding ?? 'N/A'}`,
+      ].join(', ');
+
+      await this.embeddingsService.embedAndSaveDocument(embeddingText);
+
+      quotesToSave.push(newQuote);
+    }
+
+    if (quotesToSave.length > 0) {
+      await this.stockQuoteRepository.save(quotesToSave);
+    }
+
+    this.logger.log(`Processed batch of ${quotes.length} stock quotes.`);
   }
 }

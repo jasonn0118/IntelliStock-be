@@ -1,13 +1,13 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Company } from './company.entity';
-import { Repository } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { firstValueFrom } from 'rxjs';
+import { InjectRepository } from '@nestjs/typeorm';
 import * as csv from 'csvtojson';
+import { firstValueFrom } from 'rxjs';
 import { STOCK_EXCHANGE } from 'src/stock/constants';
 import { Stock } from 'src/stock/stock.entity';
+import { Repository } from 'typeorm';
+import { Company } from './company.entity';
 
 @Injectable()
 export class CompaniesService {
@@ -53,11 +53,7 @@ export class CompaniesService {
     const filteredProfiles = profiles.filter((profile: any) => {
       const exchange = profile.exchange; // adjust if CSV headers differ
       const isFund = profile.isFund;
-      return (
-        (exchange === STOCK_EXCHANGE.NASDAQ ||
-          exchange === STOCK_EXCHANGE.NYSE) &&
-        isFund === 'false'
-      );
+      return exchange === STOCK_EXCHANGE.NASDAQ && isFund === 'false';
     });
 
     this.logger.log(`Filtered ${filteredProfiles.length} profiles.`);

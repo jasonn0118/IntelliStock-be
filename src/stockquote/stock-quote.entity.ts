@@ -1,4 +1,3 @@
-import { Stock } from '../stock/stock.entity';
 import {
   Column,
   CreateDateColumn,
@@ -7,13 +6,13 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { Stock } from '../stock/stock.entity';
 
 @Entity()
 export class StockQuote {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  // The date for which this quote is applicable (e.g., end-of-day)
   @Column({ type: 'date', nullable: true })
   date: Date;
 
@@ -62,7 +61,21 @@ export class StockQuote {
   @Column('decimal', { nullable: true })
   pe: number;
 
-  // Many quotes can be associated with one stock.
+  @Column('decimal', { nullable: true })
+  marketCap: number;
+
+  @Column('decimal', { nullable: true })
+  previousClose: number;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  earningsAnnouncement: Date;
+
+  @Column('decimal', { nullable: true })
+  sharesOutstanding: number;
+
+  @Column({ type: 'timestamp', nullable: true })
+  timestamp: Date;
+
   @ManyToOne(() => Stock, (stock) => stock.quotes, { onDelete: 'CASCADE' })
   stock: Stock;
 
