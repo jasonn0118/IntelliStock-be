@@ -1,5 +1,5 @@
 import { Expose, Type } from 'class-transformer';
-import { CompanyDto } from 'src/company/dtos/company.dto';
+import { CompanyDto } from '../../company/dtos/company.dto';
 
 export class StockDto {
   @Expose()

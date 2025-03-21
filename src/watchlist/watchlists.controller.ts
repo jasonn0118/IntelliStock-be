@@ -1,19 +1,10 @@
-import {
-  Body,
-  ClassSerializerInterceptor,
-  Controller,
-  Get,
-  Post,
-  UseGuards,
-  UseInterceptors,
-} from '@nestjs/common';
-import { WatchlistsService } from './watchlists.service';
-import { Watchlist } from './watchlist.entity';
-import { CurrentUser } from 'src/common/decorators/current-user.decorator';
-import { ApiBearerAuth } from '@nestjs/swagger';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { WatchlistDto } from './dtos/watchlist.dto';
+import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { Serialize } from 'src/interceptors/serialize.interceptor';
+import { WatchlistDto } from './dtos/watchlist.dto';
+import { Watchlist } from './watchlist.entity';
+import { WatchlistsService } from './watchlists.service';
 
 @Controller('watchlists')
 @Serialize(WatchlistDto)

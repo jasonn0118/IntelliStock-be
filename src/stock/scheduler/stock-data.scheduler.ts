@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { StocksService } from '../stocks.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { StocksService } from '../stocks.service';
 
 @Injectable()
 export class StockDataScheduler {
@@ -9,7 +9,7 @@ export class StockDataScheduler {
   constructor(private readonly stocksService: StocksService) {}
 
   // @Cron(CronExpression.EVERY_DAY_AT_6PM)
-  @Cron('38 20 * * *')
+  @Cron('26 16 * * *')
   async updateDailyQuotes(): Promise<void> {
     try {
       const tickers = await this.stocksService.getAllSymbols();
@@ -17,7 +17,7 @@ export class StockDataScheduler {
       const batchSize = 1000;
       for (let i = 0; i < tickers.length; i += batchSize) {
         const batch = tickers.slice(i, i + batchSize);
-        await this.stocksService.fetchAndSaveDailyQuotes(batch);
+        await this.stocksService.fetchAndSaveDailyQuotes();
       }
       this.logger.log('Daily quotes update completed for all stocks');
     } catch (error) {
