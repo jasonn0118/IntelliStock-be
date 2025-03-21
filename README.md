@@ -39,6 +39,7 @@
   - Stock entity with historical stock quotes.
   - Batch import of stock and historical data.
   - Scheduled tasks to update daily quotes and historical data incrementally.
+  - **Top Stocks API**: Fetch top market cap stocks and top gainers.
   
 - **Watchlist & Portfolio:**
   - Users can add multiple stocks to their watchlist.
@@ -52,10 +53,11 @@
 
 ## 🚚 Upcoming Features
 
-- **User Management Enhancements:**
-  - Expanded role-based access controls with additional permission levels.
-  
-- **Enhanced AI Financial Insights:**
+- **Search Stock Functionality**
+  - Implement an efficient stock search API with filters.
+  - Enable users to search stocks by ticker, name, or exchange.
+
+- **Enhanced AI Financial Insights**
   - Improve stock predictions using RAG-based retrieval of financial documents.
   - Implement financial document summarization for stock trends analysis.
 
@@ -93,3 +95,4 @@
 git clone https://github.com/jasonn0118/IntelliStock.git
 cd IntelliStock
 ```
+
