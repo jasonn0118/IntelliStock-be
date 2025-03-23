@@ -7,6 +7,7 @@ import { Repository } from 'typeorm';
 import { EmbeddingsService } from '../embedding/embeddings.service';
 import { StockQuote } from '../stockquote/stock-quote.entity';
 import { STOCK_EXCHANGE, STOCK_TYPE } from './constants';
+import { SearchStockDto } from './dtos/search-stock.dto';
 import { Stock } from './stock.entity';
 
 @Injectable()
@@ -78,7 +79,6 @@ export class StocksService {
       const symbolList = tickers.join(',');
       const url = `${this.baseUrl}/historical-price-full/${symbolList}?apikey=${this.configService.get<string>('FMP_API_KEY')}`;
       const response = await firstValueFrom(this.httpService.get(url));
-      // Assuming the response data structure contains "historicalStockList"
       const historicalData = response.data.historicalStockList;
 
       const quotesToSavePromises = historicalData.flatMap(async (data) => {
@@ -132,10 +132,10 @@ export class StocksService {
       .createQueryBuilder('sq')
       .innerJoinAndSelect('sq.stock', 's')
       .where("sq.date = (CURRENT_DATE - INTERVAL '1 day')")
-      .andWhere('sq.marketCap > 100000000') // ✅ Market Cap > $100M
-      .andWhere('sq.price > 5') // ✅ Stock price > $5
-      .andWhere('sq.avgVolume > 100000') // ✅ Avg Volume > 100K
-      .orderBy('sq.changesPercentage', 'DESC') // ✅ Sort by top gainers
+      .andWhere('sq.marketCap > 100000000')
+      .andWhere('sq.price > 5')
+      .andWhere('sq.avgVolume > 100000')
+      .orderBy('sq.changesPercentage', 'DESC')
       .limit(10)
       .getMany();
   }
@@ -151,6 +151,88 @@ export class StocksService {
       where: { ticker },
       relations: ['company'],
     });
+  }
+
+  /**
+   * Search for stocks by ticker symbol or company name
+   * @param query Search query string
+   * @returns Array of SearchStockDto objects with matching stocks
+   */
+  async searchStocks(query: string): Promise<SearchStockDto[]> {
+    if (!query || query.trim() === '') {
+      return [];
+    }
+
+    const searchTerm = query.trim().toLowerCase();
+
+    const latestQuoteDate = await this.stockQuoteRepository
+      .createQueryBuilder('sq')
+      .select('MAX(sq.date)', 'maxDate')
+      .getRawOne();
+
+    if (!latestQuoteDate || !latestQuoteDate.maxDate) {
+      this.logger.warn('No stock quotes found in the database');
+      return [];
+    }
+
+    const searchResults = await this.stockQuoteRepository
+      .createQueryBuilder('sq')
+      .innerJoinAndSelect('sq.stock', 's')
+      .where('sq.date = :date', { date: latestQuoteDate.maxDate })
+      .andWhere(
+        '(LOWER(s.ticker) LIKE :exactMatch OR ' +
+          'LOWER(s.ticker) LIKE :startsWith OR ' +
+          'LOWER(s.ticker) LIKE :contains OR ' +
+          'LOWER(s.name) LIKE :exactMatch OR ' +
+          'LOWER(s.name) LIKE :startsWith OR ' +
+          'LOWER(s.name) LIKE :contains OR ' +
+          'LOWER(s.name) LIKE :fuzzyMatch1 OR ' +
+          'LOWER(s.name) LIKE :fuzzyMatch2 OR ' +
+          'LOWER(s.name) LIKE :fuzzyMatch3 OR ' +
+          'LOWER(s.name) LIKE :partialWord)',
+        {
+          exactMatch: searchTerm,
+          startsWith: `${searchTerm}%`,
+          contains: `%${searchTerm}%`,
+          fuzzyMatch1: `%${searchTerm.split('').join('%')}%`,
+          fuzzyMatch2: `%${searchTerm.substring(0, Math.ceil(searchTerm.length / 2))}%${searchTerm.substring(Math.ceil(searchTerm.length / 2))}%`,
+          fuzzyMatch3: `%${searchTerm.substring(0, 2)}%${searchTerm.substring(2)}%`,
+          partialWord: `%${searchTerm.split('').join('%')}%`,
+        },
+      )
+      .orderBy(
+        'CASE ' +
+          'WHEN LOWER(s.ticker) = :exactTicker THEN 0 ' +
+          'WHEN LOWER(s.ticker) LIKE :startTicker THEN 1 ' +
+          'WHEN LOWER(s.name) = :exactName THEN 2 ' +
+          'WHEN LOWER(s.name) LIKE :startName THEN 3 ' +
+          'WHEN LOWER(s.ticker) LIKE :containsTicker THEN 4 ' +
+          'WHEN LOWER(s.name) LIKE :containsName THEN 5 ' +
+          'WHEN LOWER(s.name) LIKE :fuzzyName THEN 6 ' +
+          'ELSE 7 END',
+        'ASC',
+      )
+      .setParameters({
+        exactTicker: searchTerm,
+        startTicker: `${searchTerm}%`,
+        exactName: searchTerm,
+        startName: `${searchTerm}%`,
+        containsTicker: `%${searchTerm}%`,
+        containsName: `%${searchTerm}%`,
+        fuzzyName: `%${searchTerm.split('').join('%')}%`,
+      })
+      .limit(10)
+      .getMany();
+
+    return searchResults.map(
+      (quote) =>
+        new SearchStockDto({
+          symbol: quote.stock.ticker,
+          name: quote.stock.name,
+          price: quote.price,
+          changesPercentage: quote.changesPercentage,
+        }),
+    );
   }
 
   private splitIntoBatches<T>(array: T[], batchSize: number): T[][] {
