@@ -116,22 +116,54 @@ export class StocksService {
     }
   }
 
+  /**
+   * Get top stocks by market capitalization
+   * @returns Array of stock quotes ordered by market cap
+   */
   async getTopStocksByMarketCap(): Promise<StockQuote[]> {
+    // Get the most recent date for which we have stock quotes
+    const latestQuoteDate = await this.stockQuoteRepository
+      .createQueryBuilder('sq')
+      .select('MAX(sq.date)', 'maxDate')
+      .getRawOne();
+
+    if (!latestQuoteDate || !latestQuoteDate.maxDate) {
+      this.logger.warn('No stock quotes found in the database');
+      return [];
+    }
+
     return this.stockQuoteRepository
-      .createQueryBuilder('stock_quote')
-      .leftJoinAndSelect('stock_quote.stock', 'stock')
-      .where("stock_quote.date = (CURRENT_DATE - INTERVAL '1 day')")
-      .andWhere('stock_quote.marketCap IS NOT NULL')
-      .orderBy('stock_quote.marketCap', 'DESC')
+      .createQueryBuilder('sq')
+      .innerJoinAndSelect('sq.stock', 's')
+      .where('sq.date = :date', { date: latestQuoteDate.maxDate })
+      .andWhere('sq.marketCap > 100000000')
+      .andWhere('sq.price > 5')
+      .andWhere('sq.avgVolume > 100000')
+      .orderBy('sq.marketCap', 'DESC')
       .limit(10)
       .getMany();
   }
 
-  async getTopGainers() {
+  /**
+   * Get top gaining stocks
+   * @returns Array of stock quotes ordered by percentage change
+   */
+  async getTopGainers(): Promise<StockQuote[]> {
+    // Get the most recent date for which we have stock quotes
+    const latestQuoteDate = await this.stockQuoteRepository
+      .createQueryBuilder('sq')
+      .select('MAX(sq.date)', 'maxDate')
+      .getRawOne();
+
+    if (!latestQuoteDate || !latestQuoteDate.maxDate) {
+      this.logger.warn('No stock quotes found in the database');
+      return [];
+    }
+
     return this.stockQuoteRepository
       .createQueryBuilder('sq')
       .innerJoinAndSelect('sq.stock', 's')
-      .where("sq.date = (CURRENT_DATE - INTERVAL '1 day')")
+      .where('sq.date = :date', { date: latestQuoteDate.maxDate })
       .andWhere('sq.marketCap > 100000000')
       .andWhere('sq.price > 5')
       .andWhere('sq.avgVolume > 100000')
