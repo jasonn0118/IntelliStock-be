@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { firstValueFrom } from 'rxjs';
 import { Repository } from 'typeorm';
+import yahooFinance from 'yahoo-finance2';
 import { EmbeddingsService } from '../embedding/embeddings.service';
 import { StockQuote } from '../stockquote/stock-quote.entity';
 import { STOCK_EXCHANGE, STOCK_TYPE } from './constants';
@@ -430,7 +431,7 @@ export class StocksService {
       }
 
       // Generate and store NASDAQ market summary
-      await this.generateAndStoreExchangeSummary('NASDAQ', date);
+      await this.generateAndStoreMarketSummary(date);
 
       // Generate and store top gainers summary
       await this.generateAndStoreTopGainersSummary(date);
@@ -443,44 +444,6 @@ export class StocksService {
       );
     } catch (error) {
       this.logger.error(`Error generating market summaries: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Generate and store exchange summary for a specific exchange
-   * @param exchange Exchange name (e.g., 'NASDAQ')
-   * @param date Date for which to generate the summary
-   */
-  private async generateAndStoreExchangeSummary(
-    exchange: string,
-    date: Date,
-  ): Promise<void> {
-    try {
-      // Get total market stats for the exchange
-      const marketStats = await this.getExchangeMarketStats(exchange, date);
-
-      // Format the summary text
-      const summaryText = this.formatExchangeSummaryText(
-        exchange,
-        marketStats,
-        date,
-      );
-
-      // Store the summary document using the embeddings service
-      await this.embeddingsService.createMarketSummaryDocument(
-        exchange,
-        summaryText,
-        date,
-      );
-
-      this.logger.log(
-        `Generated and stored ${exchange} summary for ${date.toISOString().split('T')[0]}`,
-      );
-    } catch (error) {
-      this.logger.error(
-        `Error generating ${exchange} summary: ${error.message}`,
-      );
       throw error;
     }
   }
@@ -627,84 +590,35 @@ export class StocksService {
       .andWhere('sq.volume IS NOT NULL')
       .andWhere('sq.avgVolume > 100000');
 
-    const advancingCount = await baseQuery
-      .clone()
-      .andWhere('sq.changesPercentage > 0')
-      .getCount();
-    const decliningCount = await baseQuery
-      .clone()
-      .andWhere('sq.changesPercentage < 0')
-      .getCount();
-    const unchangedCount = await baseQuery
-      .clone()
-      .andWhere('ABS(sq.changesPercentage) < 0.0001')
-      .getCount();
+    // Get counts for market breadth
+    const [advancingCount, decliningCount, unchangedCount] = await Promise.all([
+      baseQuery.clone().andWhere('sq.changesPercentage > 0').getCount(),
+      baseQuery.clone().andWhere('sq.changesPercentage < 0').getCount(),
+      baseQuery
+        .clone()
+        .andWhere('ABS(sq.changesPercentage) < 0.0001')
+        .getCount(),
+    ]);
 
-    // Calculate total market cap and average P/E ratio
-    const marketCapResult = await this.stockQuoteRepository
-      .createQueryBuilder('sq')
-      .innerJoin('sq.stock', 's')
-      .select('SUM(sq.marketCap)', 'totalMarketCap')
-      .addSelect('AVG(sq.pe)', 'averagePE')
-      .where('sq.date = :date', { date })
-      .andWhere('s.exchange = :exchange', { exchange })
-      .andWhere('sq.marketCap IS NOT NULL')
-      .andWhere('sq.marketCap >= :minMarketCap', {
-        minMarketCap: MIN_MARKET_CAP,
-      })
-      .andWhere('sq.pe > 0')
-      .andWhere('sq.price IS NOT NULL')
-      .andWhere('sq.price >= :minPrice', { minPrice: MIN_PRICE })
-      .andWhere('sq.volume IS NOT NULL')
-      .andWhere('sq.avgVolume > 100000')
-      .andWhere('sq.change IS NOT NULL')
+    // Get market cap and P/E data
+    const marketData = await baseQuery
+      .clone()
+      .select([
+        'SUM(CASE WHEN sq.marketCap IS NOT NULL THEN sq.marketCap ELSE 0 END) as "totalMarketCap"',
+        'AVG(CASE WHEN sq.pe IS NOT NULL THEN sq.pe END) as "averagePE"',
+      ])
       .getRawOne();
 
-    // Get average volume
-    const volumeResult = await this.stockQuoteRepository
-      .createQueryBuilder('sq')
-      .innerJoin('sq.stock', 's')
-      .select('SUM(sq.volume)', 'totalVolume')
-      .where('sq.date = :date', { date })
-      .andWhere('s.exchange = :exchange', { exchange })
-      .andWhere('sq.volume IS NOT NULL')
-      .andWhere('sq.price IS NOT NULL')
-      .andWhere('sq.price >= :minPrice', { minPrice: MIN_PRICE })
-      .andWhere('sq.marketCap IS NOT NULL')
-      .andWhere('sq.marketCap >= :minMarketCap', {
-        minMarketCap: MIN_MARKET_CAP,
-      })
-      .andWhere('sq.avgVolume > 100000')
+    // Get previous day's market cap for comparison
+    const previousDay = new Date(date);
+    previousDay.setDate(previousDay.getDate() - 1);
+    const previousDayData = await baseQuery
+      .clone()
+      .where('sq.date = :previousDate', { previousDate: previousDay })
+      .select([
+        'SUM(CASE WHEN sq.marketCap IS NOT NULL THEN sq.marketCap ELSE 0 END) as "totalMarketCap"',
+      ])
       .getRawOne();
-
-    // Get previous day stats for comparison
-    const previousDate = new Date(date);
-    previousDate.setDate(previousDate.getDate() - 1);
-
-    const previousDayStats = await this.stockQuoteRepository
-      .createQueryBuilder('sq')
-      .innerJoin('sq.stock', 's')
-      .select('AVG(sq.price)', 'averagePrice')
-      .addSelect('SUM(sq.marketCap)', 'totalMarketCap')
-      .where('sq.date = :date', { date: previousDate })
-      .andWhere('s.exchange = :exchange', { exchange })
-      .andWhere('sq.marketCap IS NOT NULL')
-      .andWhere('sq.marketCap >= :minMarketCap', {
-        minMarketCap: MIN_MARKET_CAP,
-      })
-      .andWhere('sq.price IS NOT NULL')
-      .andWhere('sq.price >= :minPrice', { minPrice: MIN_PRICE })
-      .andWhere('sq.avgVolume > 100000')
-      .getRawOne();
-
-    this.logger.log({
-      advancingCount,
-      decliningCount,
-      unchangedCount,
-      marketCapResult,
-      volumeResult,
-      previousDayStats,
-    });
 
     return {
       date,
@@ -712,11 +626,9 @@ export class StocksService {
       advancingCount: Number(advancingCount) || 0,
       decliningCount: Number(decliningCount) || 0,
       unchangedCount: Number(unchangedCount) || 0,
-      totalMarketCap: Number(marketCapResult?.totalMarketCap) || 0,
-      averagePE: Number(marketCapResult?.averagePE) || 0,
-      totalVolume: Number(volumeResult?.totalVolume) || 0,
-      previousDayTotalMarketCap: Number(previousDayStats?.totalMarketCap) || 0,
-      previousDayAveragePrice: Number(previousDayStats?.averagePrice) || 0,
+      totalMarketCap: Number(marketData?.totalMarketCap) || 0,
+      averagePE: Number(marketData?.averagePE) || 0,
+      previousDayTotalMarketCap: Number(previousDayData?.totalMarketCap) || 0,
     };
   }
 
@@ -953,25 +865,12 @@ The ${exchange} showed ${marketBreadth} breadth on ${dateStr} with ${stats.advan
   }
 
   async getMarketSummary(date: Date): Promise<MarketSummaryResponseDto> {
-    const stats = await this.getExchangeMarketStats('NASDAQ', date);
     const compositeData = await this.getNasdaqComposite();
-
-    // Calculate market breadth sentiment
-    const sentiment = this.calculateMarketSentiment(
-      stats.advancingCount,
-      stats.decliningCount,
-    );
-
-    this.logger.log({
-      stats,
-      compositeData,
-      sentiment,
-    });
 
     // Format the response according to the DTO
     const response: MarketSummaryResponseDto = {
       date: date.toISOString().split('T')[0],
-      exchange: 'NASDAQ',
+      exchange: STOCK_EXCHANGE.NASDAQ,
       compositeIndex: {
         price: Number(compositeData.price),
         change: Number(compositeData.change),
@@ -979,28 +878,25 @@ The ${exchange} showed ${marketBreadth} breadth on ${dateStr} with ${stats.advan
         volume: Number(compositeData.volume),
       },
       stats: {
-        totalMarketCap: Number(stats.totalMarketCap),
-        marketCapChangePercent: this.calculatePercentChange(
-          stats.totalMarketCap,
-          stats.previousDayTotalMarketCap,
+        totalMarketCap: Number(compositeData.stats.totalMarketCap),
+        marketCapChangePercent: Number(
+          compositeData.stats.marketCapChangePercent,
         ),
-        averagePE: Number(stats.averagePE),
-        totalVolume: Number(stats.totalVolume),
-        advancingStocks: Number(stats.advancingCount),
-        decliningStocks: Number(stats.decliningCount),
-        unchangedStocks: Number(stats.unchangedCount),
-        advanceDeclineRatio:
-          Number(stats.advancingCount) / Number(stats.decliningCount),
+        averagePE: Number(compositeData.stats.averagePE),
+        totalVolume: Number(compositeData.stats.totalVolume),
+        advancingStocks: Number(compositeData.stats.advancingStocks),
+        decliningStocks: Number(compositeData.stats.decliningStocks),
+        unchangedStocks: Number(compositeData.stats.unchangedStocks),
+        advanceDeclineRatio: Number(compositeData.stats.advanceDeclineRatio),
       },
       breadth: {
-        sentiment,
-        advancingCount: Number(stats.advancingCount),
-        decliningCount: Number(stats.decliningCount),
-        unchangedCount: Number(stats.unchangedCount),
-        advanceDeclineRatio:
-          Number(stats.advancingCount) / Number(stats.decliningCount),
+        sentiment: compositeData.sentiment,
+        advancingCount: Number(compositeData.stats.advancingStocks),
+        decliningCount: Number(compositeData.stats.decliningStocks),
+        unchangedCount: Number(compositeData.stats.unchangedStocks),
+        advanceDeclineRatio: Number(compositeData.stats.advanceDeclineRatio),
       },
-      timestamp: Math.floor(date.getTime() / 1000),
+      timestamp: compositeData.timestamp,
     };
 
     return response;
@@ -1024,71 +920,205 @@ The ${exchange} showed ${marketBreadth} breadth on ${dateStr} with ${stats.advan
 
   private async getNasdaqComposite(): Promise<any> {
     try {
+      const result = await yahooFinance.quote('^IXIC');
+      this.logger.log(result, 'result');
+      // Get the latest date for which we have stock quotes
       const latestQuoteDate = await this.stockQuoteRepository
         .createQueryBuilder('sq')
         .select('MAX(sq.date)', 'maxDate')
         .getRawOne();
 
-      if (!latestQuoteDate?.maxDate) {
-        throw new Error('No quotes found');
+      if (!latestQuoteDate || !latestQuoteDate.maxDate) {
+        this.logger.warn('No stock quotes found in the database');
+        return this.getDefaultCompositeData();
       }
 
-      // Get current day's total market cap and volume
-      const currentDayStats = await this.stockQuoteRepository
-        .createQueryBuilder('sq')
-        .innerJoin('sq.stock', 's')
-        .select('SUM(sq.marketCap)', 'total_market_cap')
-        .addSelect('SUM(sq.volume)', 'total_volume')
-        .where('sq.date = :date', { date: latestQuoteDate.maxDate })
-        .andWhere('s.exchange = :exchange', { exchange: 'NASDAQ' })
-        .andWhere('sq.marketCap IS NOT NULL')
-        .andWhere('sq.marketCap >= :minMarketCap', { minMarketCap: 100000000 })
-        .andWhere('sq.price >= :minPrice', { minPrice: 5 })
-        .getRawOne();
+      const marketStats = await this.getExchangeMarketStats(
+        STOCK_EXCHANGE.NASDAQ,
+        latestQuoteDate.maxDate,
+      );
 
-      // Get previous day's total market cap for comparison
-      const previousDate = new Date(latestQuoteDate.maxDate);
-      previousDate.setDate(previousDate.getDate() - 1);
-
-      const previousDayStats = await this.stockQuoteRepository
-        .createQueryBuilder('sq')
-        .innerJoin('sq.stock', 's')
-        .select('SUM(sq.marketCap)', 'total_market_cap')
-        .where('sq.date = :date', { date: previousDate })
-        .andWhere('s.exchange = :exchange', { exchange: 'NASDAQ' })
-        .andWhere('sq.marketCap IS NOT NULL')
-        .andWhere('sq.marketCap >= :minMarketCap', { minMarketCap: 100000000 })
-        .andWhere('sq.price >= :minPrice', { minPrice: 5 })
-        .getRawOne();
-
-      const currentMarketCap = Number(currentDayStats?.total_market_cap) || 0;
-      const previousMarketCap = Number(previousDayStats?.total_market_cap) || 0;
-      const change = currentMarketCap - previousMarketCap;
-      const changesPercentage = previousMarketCap
-        ? (change / previousMarketCap) * 100
-        : 0;
-
-      this.logger.log({
-        prev: currentMarketCap,
-        current: previousMarketCap,
-        change,
-        changesPercentage,
-      });
+      const sentiment = this.calculateMarketSentimentFromPrice(
+        result.regularMarketPrice,
+        result.regularMarketPreviousClose,
+      );
 
       return {
-        price: currentMarketCap / 1e12, // Convert to trillions for readability
-        change: change / 1e12,
-        changesPercentage,
-        volume: Number(currentDayStats?.total_volume) || 0,
+        price: result.regularMarketPrice,
+        change: result.regularMarketChange,
+        changesPercentage: result.regularMarketChangePercent,
+        volume: result.regularMarketVolume,
+        dayHigh: result.regularMarketDayHigh,
+        dayLow: result.regularMarketDayLow,
+        previousClose: result.regularMarketPreviousClose,
+        open: result.regularMarketOpen,
+        marketState: result.marketState,
+        timestamp: new Date(result.regularMarketTime).getTime() / 1000,
+        fiftyDayAverage: result.fiftyDayAverage,
+        twoHundredDayAverage: result.twoHundredDayAverage,
+        fiftyTwoWeekHigh: result.fiftyTwoWeekHigh,
+        fiftyTwoWeekLow: result.fiftyTwoWeekLow,
+        averageDailyVolume3Month: result.averageDailyVolume3Month,
+        averageDailyVolume10Day: result.averageDailyVolume10Day,
+        exchangeTimezoneName: result.exchangeTimezoneName,
+        exchangeTimezoneShortName: result.exchangeTimezoneShortName,
+        stats: {
+          totalMarketCap: marketStats.totalMarketCap,
+          marketCapChangePercent:
+            marketStats.previousDayTotalMarketCap > 0
+              ? ((marketStats.totalMarketCap -
+                  marketStats.previousDayTotalMarketCap) /
+                  marketStats.previousDayTotalMarketCap) *
+                100
+              : 0,
+          averagePE: marketStats.averagePE,
+          totalVolume: result.regularMarketVolume || 0,
+          advancingStocks: marketStats.advancingCount,
+          decliningStocks: marketStats.decliningCount,
+          unchangedStocks: marketStats.unchangedCount,
+          advanceDeclineRatio:
+            marketStats.decliningCount > 0
+              ? marketStats.advancingCount / marketStats.decliningCount
+              : marketStats.advancingCount > 0
+                ? Infinity
+                : 0,
+        },
+        sentiment,
       };
     } catch (error) {
-      this.logger.error(`Error calculating NASDAQ Composite: ${error.message}`);
-      return {
-        price: 0,
-        change: 0,
-        changesPercentage: 0,
-        volume: 0,
-      };
+      this.logger.error(`Error fetching NASDAQ Composite: ${error.message}`);
+      return this.getDefaultCompositeData();
     }
+  }
+
+  private getDefaultCompositeData(): any {
+    return {
+      price: 0,
+      change: 0,
+      changesPercentage: 0,
+      volume: 0,
+      dayHigh: 0,
+      dayLow: 0,
+      previousClose: 0,
+      open: 0,
+      marketState: 'CLOSED',
+      timestamp: Math.floor(Date.now() / 1000),
+      fiftyDayAverage: 0,
+      twoHundredDayAverage: 0,
+      fiftyTwoWeekHigh: 0,
+      fiftyTwoWeekLow: 0,
+      averageDailyVolume3Month: 0,
+      averageDailyVolume10Day: 0,
+      exchangeTimezoneName: 'America/New_York',
+      exchangeTimezoneShortName: 'EDT',
+      stats: {
+        totalMarketCap: 0,
+        marketCapChangePercent: 0,
+        averagePE: 0,
+        totalVolume: 0,
+        advancingStocks: 0,
+        decliningStocks: 0,
+        unchangedStocks: 0,
+        advanceDeclineRatio: 0,
+      },
+      sentiment: 'neutral',
+    };
+  }
+
+  private calculateMarketSentimentFromPrice(
+    currentPrice: number,
+    previousClose: number,
+  ): MarketBreadth['sentiment'] {
+    const changePercent =
+      ((currentPrice - previousClose) / previousClose) * 100;
+
+    if (changePercent > 1.5) return 'very positive';
+    if (changePercent > 0.5) return 'positive';
+    if (changePercent < -1.5) return 'very negative';
+    if (changePercent < -0.5) return 'negative';
+    return 'neutral';
+  }
+
+  private async generateAndStoreMarketSummary(date: Date): Promise<void> {
+    try {
+      const compositeData = await this.getNasdaqComposite();
+
+      // Format the summary text
+      const summaryText = this.formatMarketSummaryText(compositeData, date);
+
+      // Store the summary document
+      await this.embeddingsService.createMarketSummaryDocument(
+        STOCK_EXCHANGE.NASDAQ,
+        summaryText,
+        date,
+      );
+
+      this.logger.log(
+        `Generated and stored market summary for ${date.toISOString().split('T')[0]}`,
+      );
+    } catch (error) {
+      this.logger.error(`Error generating market summary: ${error.message}`);
+      throw error;
+    }
+  }
+
+  private formatMarketSummaryText(compositeData: any, date: Date): string {
+    const dateStr = date.toISOString().split('T')[0];
+    const timeStr = compositeData.timestamp
+      ? new Date(compositeData.timestamp * 1000).toLocaleTimeString('en-US', {
+          timeZone: compositeData.exchangeTimezoneName || 'America/New_York',
+        })
+      : 'N/A';
+
+    // Safely format numerical values with null checks
+    const formatNumber = (value: number | undefined, decimals: number = 2) => {
+      return value !== undefined ? value.toFixed(decimals) : 'N/A';
+    };
+
+    const formatVolume = (value: number | undefined) => {
+      return value !== undefined ? (value / 1000000).toFixed(2) : 'N/A';
+    };
+
+    const formatMarketCap = (value: number | undefined) => {
+      return value !== undefined ? (value / 1e12).toFixed(2) : 'N/A';
+    };
+
+    const formatPercentChange = (
+      current: number | undefined,
+      previous: number | undefined,
+    ) => {
+      if (current === undefined || previous === undefined || previous === 0)
+        return 'N/A';
+      return (((current - previous) / previous) * 100).toFixed(2);
+    };
+
+    return `NASDAQ Market Summary for ${dateStr} at ${timeStr}
+
+Index Performance:
+- NASDAQ Composite: ${formatNumber(compositeData.price)} (${formatNumber(compositeData.changesPercentage)}%)
+- Day Range: ${formatNumber(compositeData.dayLow)} - ${formatNumber(compositeData.dayHigh)}
+- Open: ${formatNumber(compositeData.open)} | Previous Close: ${formatNumber(compositeData.previousClose)}
+- Volume: ${formatVolume(compositeData.volume)}M shares
+
+Market Averages:
+- 50-Day Average: ${formatNumber(compositeData.fiftyDayAverage)}
+- 200-Day Average: ${formatNumber(compositeData.twoHundredDayAverage)}
+- 52-Week Range: ${formatNumber(compositeData.fiftyTwoWeekLow)} - ${formatNumber(compositeData.fiftyTwoWeekHigh)}
+
+Market Breadth:
+- Advancing Stocks: ${compositeData.stats.advancingStocks || 0}
+- Declining Stocks: ${compositeData.stats.decliningStocks || 0}
+- Unchanged Stocks: ${compositeData.stats.unchangedStocks || 0}
+- Advance/Decline Ratio: ${compositeData.stats.decliningStocks ? (compositeData.stats.advancingStocks / compositeData.stats.decliningStocks).toFixed(2) : 'N/A'}
+- Market Sentiment: ${compositeData.sentiment || 'neutral'}
+
+Market Statistics:
+- Total Market Cap: $${formatMarketCap(compositeData.stats?.totalMarketCap)}T
+- Market Cap Change: ${formatNumber(compositeData.stats?.marketCapChangePercent)}%
+- Average P/E Ratio: ${formatNumber(compositeData.stats?.averagePE)}
+- Total Volume: ${formatVolume(compositeData.stats?.totalVolume)}M shares
+
+Market State: ${compositeData.marketState || 'UNKNOWN'}
+Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (${compositeData.exchangeTimezoneShortName || 'EDT'})`;
   }
 }
