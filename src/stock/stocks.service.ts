@@ -16,6 +16,7 @@ import { STOCK_EXCHANGE, STOCK_TYPE } from './constants';
 import { MarketBreadthDto, MarketStatsDto } from './dtos/market-stats.dto';
 import { MarketSummaryResponseDto } from './dtos/market-summary.dto';
 import { SearchStockDto } from './dtos/search-stock.dto';
+import { AiMarketAnalysisService } from './services/ai-market-analysis.service';
 import { Stock } from './stock.entity';
 
 interface YahooFinanceResult {
@@ -86,6 +87,7 @@ export class StocksService {
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
     private readonly embeddingsService: EmbeddingsService,
+    private readonly aiMarketAnalysisService: AiMarketAnalysisService,
   ) {}
 
   async importStockList(): Promise<void> {
@@ -816,6 +818,38 @@ export class StocksService {
   async getMarketSummary(date: Date): Promise<MarketSummaryResponseDto> {
     const compositeData = await this.getNasdaqComposite();
 
+    // Generate AI analysis
+    const aiAnalysis =
+      await this.aiMarketAnalysisService.generateMarketAnalysis({
+        date: new Date(date),
+        exchange: STOCK_EXCHANGE.NASDAQ,
+        compositeIndex: {
+          price: Number(compositeData.price),
+          change: Number(compositeData.change),
+          changePercent: Number(compositeData.changesPercentage),
+          volume: Number(compositeData.volume),
+        },
+        stats: {
+          totalMarketCap: Number(compositeData.stats.totalMarketCap),
+          marketCapChangePercent: Number(
+            compositeData.stats.marketCapChangePercent,
+          ),
+          averagePE: Number(compositeData.stats.averagePE),
+          totalVolume: Number(compositeData.stats.totalVolume),
+          advancingStocks: Number(compositeData.stats.advancingStocks),
+          decliningStocks: Number(compositeData.stats.decliningStocks),
+          unchangedStocks: Number(compositeData.stats.unchangedStocks),
+          advanceDeclineRatio: Number(compositeData.stats.advanceDeclineRatio),
+        },
+        breadth: {
+          sentiment: compositeData.sentiment,
+          advancingCount: Number(compositeData.stats.advancingStocks),
+          decliningCount: Number(compositeData.stats.decliningStocks),
+          unchangedCount: Number(compositeData.stats.unchangedStocks),
+          advanceDeclineRatio: Number(compositeData.stats.advanceDeclineRatio),
+        },
+      });
+
     const response: MarketSummaryResponseDto = {
       date: date.toISOString().split('T')[0],
       exchange: STOCK_EXCHANGE.NASDAQ,
@@ -845,6 +879,7 @@ export class StocksService {
         advanceDeclineRatio: Number(compositeData.stats.advanceDeclineRatio),
       },
       timestamp: compositeData.timestamp,
+      aiAnalysis,
     };
 
     return response;

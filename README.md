@@ -75,6 +75,13 @@ src/
 
 ## 🔧 Recent Updates - March 25, 2025
 
+### AI Market Analysis
+- Added AI-powered market analysis to the market summary API
+- Implemented detailed sentiment analysis of market conditions
+- Enhanced market insights with technical indicators and trading recommendations
+- Integrated OpenAI GPT-4o model for professional financial analysis
+- Structured JSON response format for easy frontend consumption
+
 ### Document Management
 - Enhanced document entity with new fields:
   - Type and category classification

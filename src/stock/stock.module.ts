@@ -10,6 +10,7 @@ import { StockQuote } from 'src/stockquote/stock-quote.entity';
 import { StockDataScheduler } from './scheduler/stock-data.scheduler';
 import { StocksController } from './stocks.controller';
 import { StocksService } from './stocks.service';
+import { AiMarketAnalysisService } from './services/ai-market-analysis.service';
 
 @Module({
   imports: [
@@ -18,7 +19,7 @@ import { StocksService } from './stocks.service';
     HttpModule,
   ],
   controllers: [StocksController],
-  providers: [StocksService, StockDataScheduler, EmbeddingsService],
+  providers: [StocksService, StockDataScheduler, EmbeddingsService, AiMarketAnalysisService],
   exports: [StocksService],
 })
 export class StockModule {}
