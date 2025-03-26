@@ -65,9 +65,11 @@ describe('StocksController', () => {
   });
 
   describe('getMarketSummary', () => {
-    it('should return market summary data', async () => {
+    it('should return market summary data with date-specific caching', async () => {
+      const testDate = '2024-03-20';
+      const expectedDate = new Date(testDate);
       const mockSummary: MarketSummaryResponseDto = {
-        date: new Date().toISOString(),
+        date: testDate,
         exchange: 'NASDAQ',
         compositeIndex: {
           price: 15000,
@@ -94,15 +96,109 @@ describe('StocksController', () => {
         },
         timestamp: Date.now(),
       };
+
+      const cacheKey = 'market-summary';
+      mockMarketCacheService.getCachedMarketData.mockResolvedValue(null);
+      mockStocksService.getMarketSummary.mockResolvedValue(mockSummary);
+      mockMarketCacheService.cacheMarketData.mockResolvedValue(undefined);
+
+      const result = await controller.getMarketSummary(testDate);
+      expect(result).toEqual(mockSummary);
+      expect(mockStocksService.getMarketSummary).toHaveBeenCalledWith(
+        expectedDate,
+      );
+      expect(mockMarketCacheService.cacheMarketData).toHaveBeenCalledWith(
+        cacheKey,
+        mockSummary,
+      );
+    });
+
+    it('should return cached market summary data if available', async () => {
+      const testDate = '2024-03-20';
+      const mockSummary: MarketSummaryResponseDto = {
+        date: testDate,
+        exchange: 'NASDAQ',
+        compositeIndex: {
+          price: 15000,
+          change: 150,
+          changePercent: 1.0,
+          volume: 1000000000,
+        },
+        stats: {
+          totalMarketCap: 5000000000000,
+          marketCapChangePercent: 1.5,
+          averagePE: 25.5,
+          totalVolume: 1000000000,
+          advancingStocks: 1500,
+          decliningStocks: 1000,
+          unchangedStocks: 500,
+          advanceDeclineRatio: 1.5,
+        },
+        breadth: {
+          advancingCount: 1500,
+          decliningCount: 1000,
+          unchangedCount: 500,
+          advanceDeclineRatio: 1.5,
+          sentiment: 'positive',
+        },
+        timestamp: Date.now(),
+      };
+
+      const cacheKey = 'market-summary';
+      // Reset mock calls before the test
+      mockStocksService.getMarketSummary.mockClear();
+      mockMarketCacheService.cacheMarketData.mockClear();
+      mockMarketCacheService.getCachedMarketData.mockResolvedValue(mockSummary);
+
+      const result = await controller.getMarketSummary(testDate);
+      expect(result).toEqual(mockSummary);
+      expect(mockStocksService.getMarketSummary).not.toHaveBeenCalled();
+      expect(mockMarketCacheService.cacheMarketData).not.toHaveBeenCalled();
+    });
+
+    it('should use current date when no date is provided', async () => {
+      const today = new Date().toISOString().split('T')[0];
+      const mockSummary: MarketSummaryResponseDto = {
+        date: today,
+        exchange: 'NASDAQ',
+        compositeIndex: {
+          price: 15000,
+          change: 150,
+          changePercent: 1.0,
+          volume: 1000000000,
+        },
+        stats: {
+          totalMarketCap: 5000000000000,
+          marketCapChangePercent: 1.5,
+          averagePE: 25.5,
+          totalVolume: 1000000000,
+          advancingStocks: 1500,
+          decliningStocks: 1000,
+          unchangedStocks: 500,
+          advanceDeclineRatio: 1.5,
+        },
+        breadth: {
+          advancingCount: 1500,
+          decliningCount: 1000,
+          unchangedCount: 500,
+          advanceDeclineRatio: 1.5,
+          sentiment: 'positive',
+        },
+        timestamp: Date.now(),
+      };
+
+      const cacheKey = 'market-summary';
       mockMarketCacheService.getCachedMarketData.mockResolvedValue(null);
       mockStocksService.getMarketSummary.mockResolvedValue(mockSummary);
       mockMarketCacheService.cacheMarketData.mockResolvedValue(undefined);
 
       const result = await controller.getMarketSummary();
       expect(result).toEqual(mockSummary);
-      expect(service.getMarketSummary).toHaveBeenCalled();
+      expect(mockStocksService.getMarketSummary).toHaveBeenCalledWith(
+        expect.any(Date),
+      );
       expect(mockMarketCacheService.cacheMarketData).toHaveBeenCalledWith(
-        'market-summary',
+        cacheKey,
         mockSummary,
       );
     });
