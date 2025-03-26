@@ -8,9 +8,10 @@ import { Document } from 'src/document/document.entity';
 import { EmbeddingsService } from 'src/embedding/embeddings.service';
 import { StockQuote } from 'src/stockquote/stock-quote.entity';
 import { StockDataScheduler } from './scheduler/stock-data.scheduler';
+import { AiMarketAnalysisService } from './services/ai-market-analysis.service';
+import { MarketCacheService } from './services/market-cache.service';
 import { StocksController } from './stocks.controller';
 import { StocksService } from './stocks.service';
-import { AiMarketAnalysisService } from './services/ai-market-analysis.service';
 
 @Module({
   imports: [
@@ -19,7 +20,13 @@ import { AiMarketAnalysisService } from './services/ai-market-analysis.service';
     HttpModule,
   ],
   controllers: [StocksController],
-  providers: [StocksService, StockDataScheduler, EmbeddingsService, AiMarketAnalysisService],
+  providers: [
+    StocksService,
+    StockDataScheduler,
+    EmbeddingsService,
+    AiMarketAnalysisService,
+    MarketCacheService,
+  ],
   exports: [StocksService],
 })
 export class StockModule {}

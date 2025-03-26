@@ -1,4 +1,3 @@
-import { CacheKey, CacheTTL } from '@nestjs/cache-manager';
 import {
   ClassSerializerInterceptor,
   Controller,
@@ -12,8 +11,9 @@ import {
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { MarketSummaryResponseDto } from './dtos/market-summary.dto';
 import { SearchStockDto } from './dtos/search-stock.dto';
-import { TopStockDto } from './dtos/top-stock.dto';
+import { TopStocksResponseDto } from './dtos/top-stock.dto';
 import { StockDataScheduler } from './scheduler/stock-data.scheduler';
+import { MarketCacheService } from './services/market-cache.service';
 import { StocksService } from './stocks.service';
 
 @ApiTags('stocks')
@@ -25,6 +25,7 @@ export class StocksController {
   constructor(
     private readonly stocksService: StocksService,
     private readonly stockDataScheduler: StockDataScheduler,
+    private readonly marketCacheService: MarketCacheService,
   ) {}
 
   @Post('import-list')
@@ -53,45 +54,32 @@ export class StocksController {
     return this.stocksService.searchStocks(query);
   }
 
-  @CacheKey('top-stocks')
-  @CacheTTL(24 * 60 * 60)
   @Get('top-stocks')
+  @ApiOperation({ summary: 'Get top performing stocks' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns top performing stocks',
+    type: TopStocksResponseDto,
+  })
   async getTopStocks() {
-    const marketCapStocks = await this.stocksService.getTopStocksByMarketCap();
-    const gainerStocks = await this.stocksService.getTopGainers();
+    const cached =
+      await this.marketCacheService.getCachedMarketData('top-stocks');
+    if (cached) {
+      return cached;
+    }
 
-    return {
-      marketCap: marketCapStocks.map(
-        (quote) =>
-          new TopStockDto({
-            symbol: quote.stock.ticker,
-            name: quote.stock.name,
-            price: quote.price,
-            marketCap: quote.marketCap,
-            changesPercentage: quote.changesPercentage,
-          }),
-      ),
-      gainers: gainerStocks.map(
-        (quote) =>
-          new TopStockDto({
-            symbol: quote.stock.ticker,
-            name: quote.stock.name,
-            price: quote.price,
-            changesPercentage: quote.changesPercentage,
-          }),
-      ),
-    };
+    const topStocks = await this.stocksService.getTopStocks();
+    await this.marketCacheService.cacheMarketData('top-stocks', topStocks);
+    return topStocks;
   }
 
-  @CacheKey('market-summary')
-  @CacheTTL(24 * 60 * 60)
   @Get('market-summary')
-  @ApiOperation({ summary: 'Get market summary for a specific date' })
+  @ApiOperation({ summary: 'Get market summary with AI analysis' })
   @ApiQuery({
     name: 'date',
     required: false,
     type: String,
-    description: 'Date in YYYY-MM-DD format',
+    description: 'Date in YYYY-MM-DD format (defaults to today)',
   })
   @ApiResponse({ status: 200, type: MarketSummaryResponseDto })
   async getMarketSummary(
@@ -99,7 +87,15 @@ export class StocksController {
   ): Promise<MarketSummaryResponseDto> {
     const date = dateStr ? new Date(dateStr) : new Date();
 
-    return this.stocksService.getMarketSummary(date);
+    const cached =
+      await this.marketCacheService.getCachedMarketData('market-summary');
+    if (cached) {
+      return cached;
+    }
+
+    const marketData = await this.stocksService.getMarketSummary(date);
+    await this.marketCacheService.cacheMarketData('market-summary', marketData);
+    return marketData;
   }
 
   @Get(':ticker')
