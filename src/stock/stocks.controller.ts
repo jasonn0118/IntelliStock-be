@@ -1,3 +1,4 @@
+import { CacheKey, CacheTTL } from '@nestjs/cache-manager';
 import {
   ClassSerializerInterceptor,
   Controller,
@@ -52,6 +53,8 @@ export class StocksController {
     return this.stocksService.searchStocks(query);
   }
 
+  @CacheKey('top-stocks')
+  @CacheTTL(24 * 60 * 60)
   @Get('top-stocks')
   async getTopStocks() {
     const marketCapStocks = await this.stocksService.getTopStocksByMarketCap();
@@ -79,6 +82,9 @@ export class StocksController {
       ),
     };
   }
+
+  @CacheKey('market-summary')
+  @CacheTTL(24 * 60 * 60)
   @Get('market-summary')
   @ApiOperation({ summary: 'Get market summary for a specific date' })
   @ApiQuery({

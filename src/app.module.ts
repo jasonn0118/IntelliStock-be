@@ -1,21 +1,26 @@
+import { CacheInterceptor, CacheModule } from '@nestjs/cache-manager';
 import { Module, ValidationPipe } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { DatabaseModule } from './database/database.module';
-import { UserModule } from './users/user.module';
-import { APP_PIPE } from '@nestjs/core';
 import { AuthModule } from './auth/auth.module';
-import { StockModule } from './stock/stock.module';
 import { CompanyModule } from './company/company.module';
-import { WatchlistModule } from './watchlist/watchlist.module';
+import { DatabaseModule } from './database/database.module';
 import { DocumentModule } from './document/document.module';
 import { EmbeddingModule } from './embedding/embedding.module';
-import { ConfigModule } from '@nestjs/config';
+import { StockModule } from './stock/stock.module';
+import { UserModule } from './users/user.module';
+import { WatchlistModule } from './watchlist/watchlist.module';
 
 @Module({
   imports: [
     DatabaseModule,
     ConfigModule.forRoot({ isGlobal: true }),
+    CacheModule.register({
+      isGlobal: true,
+      ttl: 60 * 60,
+    }),
     UserModule,
     AuthModule,
     StockModule,
@@ -33,6 +38,10 @@ import { ConfigModule } from '@nestjs/config';
       useValue: new ValidationPipe({
         whitelist: true,
       }),
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: CacheInterceptor,
     },
   ],
 })
