@@ -8,7 +8,6 @@
 [![GitHub stars](https://img.shields.io/github/stars/jasonn0118/IntelliStock.svg?style=social&label=Star)](https://github.com/jasonn0118/IntelliStock/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/jasonn0118/IntelliStock.svg)](https://github.com/jasonn0118/IntelliStock/issues)
 [![GitHub forks](https://img.shields.io/github/forks/jasonn0118/IntelliStock.svg)](https://github.com/jasonn0118/IntelliStock/network)
-[![CircleCI](https://img.shields.io/circleci/build/github/jasonn0118/IntelliStock/master)](https://circleci.com/gh/jasonn0118/IntelliStock)
 
 <p align="center">
   IntelliStock is a comprehensive backend application built with NestJS, providing secure user authentication, robust PostgreSQL database integration, and seamless OAuth functionality.
