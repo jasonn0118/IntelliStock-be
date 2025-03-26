@@ -1,3 +1,11 @@
+import { ApiProperty } from '@nestjs/swagger';
+import { IsDateString, IsNumber, IsString } from 'class-validator';
+import {
+  CompositeIndexDto,
+  MarketBreadthDto,
+  MarketStatsDto,
+} from './market-stats.dto';
+
 export interface MarketStats {
   totalMarketCap: number;
   marketCapChangePercent: number;
@@ -30,10 +38,42 @@ export interface MarketBreadth {
 }
 
 export class MarketSummaryResponseDto {
-  date: string; // YYYY-MM-DD format
-  exchange: string; // e.g., "NASDAQ"
-  compositeIndex: IndexData; // NASDAQ Composite data
-  stats: MarketStats; // Overall market statistics
-  breadth: MarketBreadth; // Market breadth information
-  timestamp: number; // Unix timestamp of the data
+  @ApiProperty({
+    description: 'Date of the market summary',
+    example: '2024-03-25',
+  })
+  @IsDateString()
+  date: string;
+
+  @ApiProperty({
+    description: 'Stock exchange name',
+    example: 'NASDAQ',
+  })
+  @IsString()
+  exchange: string;
+
+  @ApiProperty({
+    description: 'Composite index data',
+    type: CompositeIndexDto,
+  })
+  compositeIndex: CompositeIndexDto;
+
+  @ApiProperty({
+    description: 'Market statistics',
+    type: MarketStatsDto,
+  })
+  stats: MarketStatsDto;
+
+  @ApiProperty({
+    description: 'Market breadth information',
+    type: MarketBreadthDto,
+  })
+  breadth: MarketBreadthDto;
+
+  @ApiProperty({
+    description: 'Timestamp of the data',
+    example: 1711392000,
+  })
+  @IsNumber()
+  timestamp: number;
 }
