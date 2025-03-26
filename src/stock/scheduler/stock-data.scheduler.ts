@@ -48,17 +48,19 @@ export class StockDataScheduler {
       );
     } catch (error) {
       this.logger.error('Error updating historical data', error.stack);
+      throw error;
     }
   }
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
-  async handleGenerateMarketSummaries() {
+  async handleGenerateMarketSummaries(): Promise<void> {
     try {
       this.logger.log('Starting daily market summaries generation...');
       await this.stocksService.generateAndStoreMarketSummaries();
       this.logger.log('Successfully generated daily market summaries');
     } catch (error) {
       this.logger.error(`Error generating market summaries: ${error.message}`);
+      throw error;
     }
   }
 }

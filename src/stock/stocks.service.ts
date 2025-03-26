@@ -4,8 +4,12 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { firstValueFrom } from 'rxjs';
 import { Repository } from 'typeorm';
-import { formatNumber, formatTrillion, formatVolume } from 'utils/formatData';
 import yahooFinance from 'yahoo-finance2';
+import {
+  formatNumber,
+  formatTrillion,
+  formatVolume,
+} from '../../utils/formatData';
 import { EmbeddingsService } from '../embedding/embeddings.service';
 import { StockQuote } from '../stockquote/stock-quote.entity';
 import { STOCK_EXCHANGE, STOCK_TYPE } from './constants';
