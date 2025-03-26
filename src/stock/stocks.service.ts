@@ -16,7 +16,7 @@ import { STOCK_EXCHANGE, STOCK_TYPE } from './constants';
 import { MarketBreadthDto, MarketStatsDto } from './dtos/market-stats.dto';
 import { MarketSummaryResponseDto } from './dtos/market-summary.dto';
 import { SearchStockDto } from './dtos/search-stock.dto';
-import { TopStockDto } from './dtos/top-stock.dto';
+import { TopStockDto, TopStocksResponseDto } from './dtos/top-stock.dto';
 import { AiMarketAnalysisService } from './services/ai-market-analysis.service';
 import { Stock } from './stock.entity';
 
@@ -1085,9 +1085,11 @@ Market State: ${compositeData.marketState || 'UNKNOWN'}
 Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (${compositeData.exchangeTimezoneShortName || 'EDT'})`;
   }
 
-  async getTopStocks() {
-    const marketCapStocks = await this.getTopStocksByMarketCap();
-    const gainerStocks = await this.getTopGainers();
+  async getTopStocks(): Promise<TopStocksResponseDto> {
+    const [marketCapStocks, gainerStocks] = await Promise.all([
+      this.getTopStocksByMarketCap(),
+      this.getTopGainers(),
+    ]);
 
     return {
       marketCap: marketCapStocks.map(
@@ -1098,6 +1100,7 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
             price: quote.price,
             marketCap: quote.marketCap,
             changesPercentage: quote.changesPercentage,
+            stock: quote.stock,
           }),
       ),
       gainers: gainerStocks.map(
@@ -1107,6 +1110,7 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
             name: quote.stock.name,
             price: quote.price,
             changesPercentage: quote.changesPercentage,
+            stock: quote.stock,
           }),
       ),
     };
