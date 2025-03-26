@@ -8,8 +8,7 @@ export class StockDataScheduler {
 
   constructor(private readonly stocksService: StocksService) {}
 
-  // @Cron(CronExpression.EVERY_DAY_AT_6PM)
-  @Cron('26 16 * * *')
+  @Cron(CronExpression.EVERY_DAY_AT_6PM)
   async updateDailyQuotes(): Promise<void> {
     try {
       const tickers = await this.stocksService.getAllSymbols();
@@ -49,6 +48,19 @@ export class StockDataScheduler {
       );
     } catch (error) {
       this.logger.error('Error updating historical data', error.stack);
+      throw error;
+    }
+  }
+
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async handleGenerateMarketSummaries(): Promise<void> {
+    try {
+      this.logger.log('Starting daily market summaries generation...');
+      await this.stocksService.generateAndStoreMarketSummaries();
+      this.logger.log('Successfully generated daily market summaries');
+    } catch (error) {
+      this.logger.error(`Error generating market summaries: ${error.message}`);
+      throw error;
     }
   }
 }

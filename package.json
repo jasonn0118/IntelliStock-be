@@ -52,7 +52,8 @@
     "pg": "^8.13.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "typeorm": "^0.3.20"
+    "typeorm": "^0.3.20",
+    "yahoo-finance2": "^2.13.3"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.2",

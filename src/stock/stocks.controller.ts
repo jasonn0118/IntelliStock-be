@@ -2,21 +2,29 @@ import {
   ClassSerializerInterceptor,
   Controller,
   Get,
+  Logger,
   Param,
   Post,
   Query,
   UseInterceptors,
 } from '@nestjs/common';
-import { TopStockDto } from './dtos/top-stock.dto';
-import { StocksService } from './stocks.service';
-import { SearchStockDto } from './dtos/search-stock.dto';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { MarketSummaryResponseDto } from './dtos/market-summary.dto';
+import { SearchStockDto } from './dtos/search-stock.dto';
+import { TopStockDto } from './dtos/top-stock.dto';
+import { StockDataScheduler } from './scheduler/stock-data.scheduler';
+import { StocksService } from './stocks.service';
 
 @ApiTags('stocks')
 @Controller('stocks')
 @UseInterceptors(ClassSerializerInterceptor)
-export class StocksContoller {
-  constructor(private readonly stocksService: StocksService) {}
+export class StocksController {
+  private readonly logger = new Logger(StocksController.name);
+
+  constructor(
+    private readonly stocksService: StocksService,
+    private readonly stockDataScheduler: StockDataScheduler,
+  ) {}
 
   @Post('import-list')
   async importStockList() {
@@ -30,13 +38,17 @@ export class StocksContoller {
 
   @Get('search')
   @ApiOperation({ summary: 'Search for stocks by ticker or company name' })
-  @ApiQuery({ name: 'query', description: 'Search query for ticker or company name', required: true })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Returns a list of stocks matching the search query',
-    type: [SearchStockDto]
+  @ApiQuery({
+    name: 'query',
+    description: 'Search query for ticker or company name',
+    required: true,
   })
-  async searchStocks(@Query('query') query: string) {
+  @ApiResponse({
+    status: 200,
+    description: 'Returns a list of stocks matching the search query',
+    type: [SearchStockDto],
+  })
+  async searchStocks(@Query('query') query: string): Promise<SearchStockDto[]> {
     return this.stocksService.searchStocks(query);
   }
 
@@ -67,15 +79,37 @@ export class StocksContoller {
       ),
     };
   }
+  @Get('market-summary')
+  @ApiOperation({ summary: 'Get market summary for a specific date' })
+  @ApiQuery({
+    name: 'date',
+    required: false,
+    type: String,
+    description: 'Date in YYYY-MM-DD format',
+  })
+  @ApiResponse({ status: 200, type: MarketSummaryResponseDto })
+  async getMarketSummary(
+    @Query('date') dateStr?: string,
+  ): Promise<MarketSummaryResponseDto> {
+    const date = dateStr ? new Date(dateStr) : new Date();
+
+    return this.stocksService.getMarketSummary(date);
+  }
 
   @Get(':ticker')
   async getStock(@Param('ticker') ticker: string) {
     return this.stocksService.getStock(ticker);
   }
 
-  // FIXME: Remove this endpoint eventually
+  // FIXME: Remove below these endpoints eventually
   @Post('fetch-quotes')
   async fetchQuotes() {
     await this.stocksService.fetchAndSaveDailyQuotes();
+  }
+
+  @Post('generate-summaries')
+  async generateMarketSummaries() {
+    await this.stockDataScheduler.handleGenerateMarketSummaries();
+    return { message: 'Market summaries generation triggered successfully' };
   }
 }

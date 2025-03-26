@@ -8,7 +8,6 @@
 [![GitHub stars](https://img.shields.io/github/stars/jasonn0118/IntelliStock.svg?style=social&label=Star)](https://github.com/jasonn0118/IntelliStock/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/jasonn0118/IntelliStock.svg)](https://github.com/jasonn0118/IntelliStock/issues)
 [![GitHub forks](https://img.shields.io/github/forks/jasonn0118/IntelliStock.svg)](https://github.com/jasonn0118/IntelliStock/network)
-[![CircleCI](https://img.shields.io/circleci/build/github/jasonn0118/IntelliStock/master)](https://circleci.com/gh/jasonn0118/IntelliStock)
 
 <p align="center">
   IntelliStock is a comprehensive backend application built with NestJS, providing secure user authentication, robust PostgreSQL database integration, and seamless OAuth functionality.
@@ -61,6 +60,55 @@
   - Improve stock predictions using RAG-based retrieval of financial documents.
   - Implement financial document summarization for stock trends analysis.
 
+## 📁 Project Structure
+
+```
+src/
+├── document/           # Document management
+├── embedding/          # AI embeddings and processing
+├── stock/             # Stock market data and analysis
+│   ├── scheduler/     # Automated data updates
+│   ├── entities/      # Data models
+│   └── dtos/          # Data transfer objects
+└── app.module.ts      # Main application module
+```
+
+## 🔧 Recent Updates - March 25, 2025
+
+### Document Management
+- Enhanced document entity with new fields:
+  - Type and category classification
+  - Date and content date tracking
+  - Ticker association
+  - Source attribution
+  - Reliability scoring
+- Improved document filtering and querying capabilities
+- Added support for various document types
+
+### AI/ML Improvements
+- Enhanced embeddings service for better document processing
+- Improved conversation history management
+- Added context-aware response generation
+- Better handling of user prompts and queries
+
+### Stock Market Features
+- Automated daily and historical data updates
+- Comprehensive market statistics and analysis
+- Improved error handling and logging
+- Enhanced test coverage for critical components
+
+### Testing Improvements
+- Added comprehensive test coverage for scheduler components
+- Improved error handling tests with proper mocking
+- Enhanced test output with suppressed error logs
+- Added test coverage for market data operations
+
+### Code Quality
+- Improved error handling across all services
+- Enhanced type safety with proper DTOs
+- Better code organization and modularity
+- Standardized naming conventions
+
 ## 📈 Technologies Used
 
 ### Back-End
@@ -95,4 +143,25 @@
 git clone https://github.com/jasonn0118/IntelliStock.git
 cd IntelliStock
 ```
+
+## 🧪 Testing
+
+Run the test suite:
+```bash
+npm test
+```
+
+For development with watch mode:
+```bash
+npm run test:watch
+```
+
+For coverage report:
+```bash
+npm run test:cov
+```
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
