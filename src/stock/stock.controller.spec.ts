@@ -1,8 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { Company } from '../company/company.entity';
 import { MarketSummaryResponseDto } from './dtos/market-summary.dto';
 import { SearchStockDto } from './dtos/search-stock.dto';
-import { Stock } from './entities/stock.entity';
 import { StockDataScheduler } from './scheduler/stock-data.scheduler';
+import { MarketCacheService } from './services/market-cache.service';
+import { Stock } from './stock.entity';
 import { StocksController } from './stocks.controller';
 import { StocksService } from './stocks.service';
 
@@ -21,12 +23,18 @@ describe('StocksController', () => {
     importStockList: jest.fn(),
     fetchAndSaveDailyQuotes: jest.fn(),
     generateAndStoreMarketSummaries: jest.fn(),
+    getTopStocks: jest.fn(),
   };
 
   const mockStockDataScheduler = {
     updateDailyQuotes: jest.fn(),
     updateHistoricalQuotes: jest.fn(),
     handleGenerateMarketSummaries: jest.fn(),
+  };
+
+  const mockMarketCacheService = {
+    getCachedMarketData: jest.fn(),
+    cacheMarketData: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -41,6 +49,10 @@ describe('StocksController', () => {
           provide: StockDataScheduler,
           useValue: mockStockDataScheduler,
         },
+        {
+          provide: MarketCacheService,
+          useValue: mockMarketCacheService,
+        },
       ],
     }).compile();
 
@@ -53,9 +65,11 @@ describe('StocksController', () => {
   });
 
   describe('getMarketSummary', () => {
-    it('should return market summary data', async () => {
+    it('should return market summary data with date-specific caching', async () => {
+      const testDate = '2024-03-20';
+      const expectedDate = new Date(testDate);
       const mockSummary: MarketSummaryResponseDto = {
-        date: new Date().toISOString(),
+        date: testDate,
         exchange: 'NASDAQ',
         compositeIndex: {
           price: 15000,
@@ -82,11 +96,111 @@ describe('StocksController', () => {
         },
         timestamp: Date.now(),
       };
+
+      const cacheKey = 'market-summary';
+      mockMarketCacheService.getCachedMarketData.mockResolvedValue(null);
       mockStocksService.getMarketSummary.mockResolvedValue(mockSummary);
+      mockMarketCacheService.cacheMarketData.mockResolvedValue(undefined);
+
+      const result = await controller.getMarketSummary(testDate);
+      expect(result).toEqual(mockSummary);
+      expect(mockStocksService.getMarketSummary).toHaveBeenCalledWith(
+        expectedDate,
+      );
+      expect(mockMarketCacheService.cacheMarketData).toHaveBeenCalledWith(
+        cacheKey,
+        mockSummary,
+      );
+    });
+
+    it('should return cached market summary data if available', async () => {
+      const testDate = '2024-03-20';
+      const mockSummary: MarketSummaryResponseDto = {
+        date: testDate,
+        exchange: 'NASDAQ',
+        compositeIndex: {
+          price: 15000,
+          change: 150,
+          changePercent: 1.0,
+          volume: 1000000000,
+        },
+        stats: {
+          totalMarketCap: 5000000000000,
+          marketCapChangePercent: 1.5,
+          averagePE: 25.5,
+          totalVolume: 1000000000,
+          advancingStocks: 1500,
+          decliningStocks: 1000,
+          unchangedStocks: 500,
+          advanceDeclineRatio: 1.5,
+        },
+        breadth: {
+          advancingCount: 1500,
+          decliningCount: 1000,
+          unchangedCount: 500,
+          advanceDeclineRatio: 1.5,
+          sentiment: 'positive',
+        },
+        timestamp: Date.now(),
+      };
+
+      const cacheKey = 'market-summary';
+      // Reset mock calls before the test
+      mockStocksService.getMarketSummary.mockClear();
+      mockMarketCacheService.cacheMarketData.mockClear();
+      mockMarketCacheService.getCachedMarketData.mockResolvedValue(mockSummary);
+
+      const result = await controller.getMarketSummary(testDate);
+      expect(result).toEqual(mockSummary);
+      expect(mockStocksService.getMarketSummary).not.toHaveBeenCalled();
+      expect(mockMarketCacheService.cacheMarketData).not.toHaveBeenCalled();
+    });
+
+    it('should use current date when no date is provided', async () => {
+      const today = new Date().toISOString().split('T')[0];
+      const mockSummary: MarketSummaryResponseDto = {
+        date: today,
+        exchange: 'NASDAQ',
+        compositeIndex: {
+          price: 15000,
+          change: 150,
+          changePercent: 1.0,
+          volume: 1000000000,
+        },
+        stats: {
+          totalMarketCap: 5000000000000,
+          marketCapChangePercent: 1.5,
+          averagePE: 25.5,
+          totalVolume: 1000000000,
+          advancingStocks: 1500,
+          decliningStocks: 1000,
+          unchangedStocks: 500,
+          advanceDeclineRatio: 1.5,
+        },
+        breadth: {
+          advancingCount: 1500,
+          decliningCount: 1000,
+          unchangedCount: 500,
+          advanceDeclineRatio: 1.5,
+          sentiment: 'positive',
+        },
+        timestamp: Date.now(),
+      };
+
+      const cacheKey = 'market-summary';
+      mockMarketCacheService.getCachedMarketData.mockResolvedValue(null);
+      mockStocksService.getMarketSummary.mockResolvedValue(mockSummary);
+      mockMarketCacheService.cacheMarketData.mockResolvedValue(undefined);
 
       const result = await controller.getMarketSummary();
       expect(result).toEqual(mockSummary);
-      expect(service.getMarketSummary).toHaveBeenCalled();
+      expect(mockStocksService.getMarketSummary).toHaveBeenCalledWith(
+        expect.any(Date),
+      );
+      expect(mockMarketCacheService.cacheMarketData).toHaveBeenCalledWith(
+        cacheKey,
+        mockSummary,
+      );
     });
   });
 
@@ -110,13 +224,30 @@ describe('StocksController', () => {
 
   describe('getStock', () => {
     it('should return stock data', async () => {
-      const mockStock: Stock = {
+      const mockCompany: Company = {
         id: 1,
         ticker: 'AAPL',
         name: 'Apple Inc.',
         exchange: 'NASDAQ',
-        sector: 'Technology',
-        industry: 'Consumer Electronics',
+        industry: 'Technology',
+        sector: 'Consumer Electronics',
+        website: 'https://www.apple.com',
+        description: 'Technology company',
+        stock: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const mockStock: Stock = {
+        id: '1',
+        ticker: 'AAPL',
+        name: 'Apple Inc.',
+        exchange: 'NASDAQ',
+        lastUpdated: new Date(),
+        quotes: [],
+        companyId: 1,
+        company: mockCompany,
+        watchListEntries: [],
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -147,29 +278,35 @@ describe('StocksController', () => {
         },
       ];
 
-      mockStocksService.getTopStocksByMarketCap.mockResolvedValue(
-        mockMarketCapStocks,
-      );
-      mockStocksService.getTopGainers.mockResolvedValue(mockGainerStocks);
-
-      const result = await controller.getTopStocks();
-      expect(result).toEqual({
+      const expectedResponse = {
         marketCap: mockMarketCapStocks.map((quote) => ({
           symbol: quote.stock.ticker,
           name: quote.stock.name,
           price: quote.price,
           marketCap: quote.marketCap,
           changesPercentage: quote.changesPercentage,
+          stock: quote.stock,
         })),
         gainers: mockGainerStocks.map((quote) => ({
           symbol: quote.stock.ticker,
           name: quote.stock.name,
           price: quote.price,
           changesPercentage: quote.changesPercentage,
+          stock: quote.stock,
         })),
-      });
-      expect(service.getTopStocksByMarketCap).toHaveBeenCalled();
-      expect(service.getTopGainers).toHaveBeenCalled();
+      };
+
+      mockMarketCacheService.getCachedMarketData.mockResolvedValue(null);
+      mockStocksService.getTopStocks.mockResolvedValue(expectedResponse);
+      mockMarketCacheService.cacheMarketData.mockResolvedValue(undefined);
+
+      const result = await controller.getTopStocks();
+      expect(result).toEqual(expectedResponse);
+      expect(service.getTopStocks).toHaveBeenCalled();
+      expect(mockMarketCacheService.cacheMarketData).toHaveBeenCalledWith(
+        'top-stocks',
+        expectedResponse,
+      );
     });
   });
 

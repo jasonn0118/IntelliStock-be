@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { MarketCacheService } from '../services/market-cache.service';
 import { StocksService } from '../stocks.service';
 import { StockDataScheduler } from './stock-data.scheduler';
 
@@ -14,6 +15,11 @@ describe('StockDataScheduler', () => {
     generateAndStoreMarketSummaries: jest.fn(),
   };
 
+  const mockMarketCacheService = {
+    getCachedMarketData: jest.fn(),
+    cacheMarketData: jest.fn(),
+  };
+
   beforeEach(async () => {
     // Mock the Logger to prevent error logs during testing
     jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
@@ -25,6 +31,10 @@ describe('StockDataScheduler', () => {
         {
           provide: StocksService,
           useValue: mockStocksService,
+        },
+        {
+          provide: MarketCacheService,
+          useValue: mockMarketCacheService,
         },
       ],
     }).compile();

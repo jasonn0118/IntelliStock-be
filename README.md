@@ -52,13 +52,12 @@
 
 ## 🚚 Upcoming Features
 
-- **Search Stock Functionality**
-  - Implement an efficient stock search API with filters.
-  - Enable users to search stocks by ticker, name, or exchange.
-
-- **Enhanced AI Financial Insights**
-  - Improve stock predictions using RAG-based retrieval of financial documents.
-  - Implement financial document summarization for stock trends analysis.
+- **Implement each Stock Insight by AI** 
+  - Historical price patterns and trends
+  - Volume analysis and trading patterns
+  - Technical indicators (RSI, MACD, Moving Averages)
+  - Fundamental metrics (P/E ratio, EPS, Market Cap)
+  - Industry sector performance comparison
 
 ## 📁 Project Structure
 
@@ -74,6 +73,12 @@ src/
 ```
 
 ## 🔧 Recent Updates - March 25, 2025
+
+### Caching System Improvements
+- Implemented intelligent caching system with midnight EST refresh
+- Added automatic cache refresh for market summary and top stocks data
+- Optimized API response times with in-memory caching
+- Enhanced system performance and reduced external API calls
 
 ### AI Market Analysis
 - Added AI-powered market analysis to the market summary API
