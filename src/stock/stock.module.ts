@@ -7,6 +7,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { Document } from 'src/document/document.entity';
 import { EmbeddingsService } from 'src/embedding/embeddings.service';
 import { StockQuote } from 'src/stockquote/stock-quote.entity';
+import { CompanyModule } from '../company/company.module';
 import { StockDataScheduler } from './scheduler/stock-data.scheduler';
 import { AiMarketAnalysisService } from './services/ai-market-analysis.service';
 import { MarketCacheService } from './services/market-cache.service';
@@ -18,6 +19,7 @@ import { StocksService } from './stocks.service';
     TypeOrmModule.forFeature([Stock, StockQuote, Document]),
     ScheduleModule.forRoot(),
     HttpModule,
+    CompanyModule,
   ],
   controllers: [StocksController],
   providers: [

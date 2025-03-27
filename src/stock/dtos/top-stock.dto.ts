@@ -1,6 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Expose, Type } from 'class-transformer';
-import { StockDto } from './stock.dto';
+import { Expose } from 'class-transformer';
 
 export class TopStockDto {
   @ApiProperty({ type: String, example: 'AAPL' })
@@ -11,22 +10,25 @@ export class TopStockDto {
   @Expose()
   name: string;
 
-  @ApiProperty({ type: Number, example: 150.75 })
+  @ApiProperty({ type: Number, example: 223.85 })
   @Expose()
   price: number;
 
-  @ApiProperty({ type: Number, example: 1000000000 })
+  @ApiProperty({ type: Number, example: 3362697085000 })
   @Expose()
   marketCap?: number;
 
-  @ApiProperty({ type: Number, example: 1.5 })
+  @ApiProperty({ type: Number, example: 1.04726 })
   @Expose()
   changesPercentage?: number;
 
-  @ApiProperty({ type: StockDto })
+  @ApiProperty({
+    type: String,
+    example:
+      'https://img.logo.dev/ticker/aapl?format=webp&retina=true&token=xxx',
+  })
   @Expose()
-  @Type(() => StockDto)
-  stock: StockDto;
+  logoUrl?: string;
 
   constructor(partial: Partial<TopStockDto>) {
     Object.assign(this, partial);

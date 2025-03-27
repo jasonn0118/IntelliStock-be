@@ -228,12 +228,22 @@ describe('StocksController', () => {
         id: 1,
         ticker: 'AAPL',
         name: 'Apple Inc.',
-        exchange: 'NASDAQ',
         industry: 'Technology',
         sector: 'Consumer Electronics',
         website: 'https://www.apple.com',
         description: 'Technology company',
+        ceo: 'Tim Cook',
+        country: 'US',
+        fullTimeEmployees: '164000',
+        phone: '+1-408-996-1010',
+        address: 'One Apple Park Way',
+        city: 'Cupertino',
+        state: 'CA',
+        zip: '95014',
+        logoUrl:
+          'https://img.logo.dev/ticker/aapl?format=webp&retina=true&token=xxx',
         stock: null,
+        stocks: [],
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -263,37 +273,30 @@ describe('StocksController', () => {
     it('should return top stocks by market cap and gainers', async () => {
       const mockMarketCapStocks = [
         {
-          stock: { ticker: 'AAPL', name: 'Apple Inc.' },
+          symbol: 'AAPL',
+          name: 'Apple Inc.',
           price: 150.25,
           marketCap: 2500000000000,
           changesPercentage: 1.5,
+          logoUrl:
+            'https://img.logo.dev/ticker/aapl?format=webp&retina=true&token=xxx',
         },
       ];
 
       const mockGainerStocks = [
         {
-          stock: { ticker: 'MSFT', name: 'Microsoft Corporation' },
+          symbol: 'MSFT',
+          name: 'Microsoft Corporation',
           price: 300.5,
           changesPercentage: 2.5,
+          logoUrl:
+            'https://img.logo.dev/ticker/msft?format=webp&retina=true&token=xxx',
         },
       ];
 
       const expectedResponse = {
-        marketCap: mockMarketCapStocks.map((quote) => ({
-          symbol: quote.stock.ticker,
-          name: quote.stock.name,
-          price: quote.price,
-          marketCap: quote.marketCap,
-          changesPercentage: quote.changesPercentage,
-          stock: quote.stock,
-        })),
-        gainers: mockGainerStocks.map((quote) => ({
-          symbol: quote.stock.ticker,
-          name: quote.stock.name,
-          price: quote.price,
-          changesPercentage: quote.changesPercentage,
-          stock: quote.stock,
-        })),
+        marketCap: mockMarketCapStocks,
+        gainers: mockGainerStocks,
       };
 
       mockMarketCacheService.getCachedMarketData.mockResolvedValue(null);
