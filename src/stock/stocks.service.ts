@@ -271,11 +271,40 @@ export class StocksService {
     return stocks.map((stock) => stock.ticker);
   }
 
+  /**
+   * Get detailed stock information by ticker symbol
+   * @param ticker Stock ticker symbol
+   * @returns Stock entity with company details and latest quote
+   */
   async getStock(ticker: string): Promise<Stock> {
-    return this.stockRepository.findOne({
+    const stock = await this.stockRepository.findOne({
       where: { ticker },
       relations: ['company'],
     });
+
+    if (!stock) {
+      return null;
+    }
+
+    const latestQuoteDate = await this.stockQuoteRepository
+      .createQueryBuilder('sq')
+      .select('MAX(sq.date)', 'maxDate')
+      .getRawOne();
+
+    if (latestQuoteDate?.maxDate) {
+      const latestQuote = await this.stockQuoteRepository.findOne({
+        where: {
+          stock: { ticker },
+          date: latestQuoteDate.maxDate,
+        },
+      });
+
+      if (latestQuote) {
+        stock.quotes = [latestQuote];
+      }
+    }
+
+    return stock;
   }
 
   /**

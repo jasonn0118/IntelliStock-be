@@ -11,6 +11,7 @@ import {
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { MarketSummaryResponseDto } from './dtos/market-summary.dto';
 import { SearchStockDto } from './dtos/search-stock.dto';
+import { StockDto } from './dtos/stock.dto';
 import { TopStocksResponseDto } from './dtos/top-stock.dto';
 import { StockDataScheduler } from './scheduler/stock-data.scheduler';
 import { MarketCacheService } from './services/market-cache.service';
@@ -99,7 +100,18 @@ export class StocksController {
   }
 
   @Get(':ticker')
-  async getStock(@Param('ticker') ticker: string) {
+  @ApiOperation({ summary: 'Get detailed stock information by ticker symbol' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Returns detailed stock information including company details and latest quote',
+    type: StockDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Stock not found',
+  })
+  async getStock(@Param('ticker') ticker: string): Promise<StockDto> {
     return this.stocksService.getStock(ticker);
   }
 
