@@ -1,116 +1,181 @@
-import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import * as csv from 'csvtojson';
-import { firstValueFrom } from 'rxjs';
-import { STOCK_EXCHANGE } from 'src/stock/constants';
-import { Stock } from 'src/stock/stock.entity';
+import { Stock } from '../stock/stock.entity';
 import { Repository } from 'typeorm';
+import yahooFinance from 'yahoo-finance2';
 import { Company } from './company.entity';
 
 @Injectable()
 export class CompaniesService {
   private readonly logger = new Logger(CompaniesService.name);
-  private readonly baseUrl =
-    'https://financialmodelingprep.com/stable/profile-bulk';
-  private readonly totalParts = 4;
+  private readonly logoDevToken: string;
+
   constructor(
     @InjectRepository(Company)
-    private companyRepository: Repository<Company>,
+    private readonly companyRepository: Repository<Company>,
     @InjectRepository(Stock)
-    private stockRepository: Repository<Stock>,
-    private readonly httpService: HttpService,
+    private readonly stockRepository: Repository<Stock>,
     private readonly configService: ConfigService,
-  ) {}
+  ) {
+    this.logoDevToken = this.configService.get<string>('LOGO_DEV_TOKEN');
+  }
 
-  async fetchBulkCompanyProfiles(): Promise<any[]> {
+  private getLogoUrl(symbol: string): string {
+    return `https://img.logo.dev/ticker/${symbol.toLowerCase()}?format=webp&retina=true&token=${this.logoDevToken}`;
+  }
+
+  async fetchCompanyProfile(symbol: string): Promise<any> {
     try {
-      const requests = Array.from({ length: this.totalParts }, (_, index) => {
-        const url = `${this.baseUrl}?part=${index}&apikey=${this.configService.get<string>('FMP_API_KEY')}`;
-        return firstValueFrom(this.httpService.get(url));
-      });
-      // Wait for all requests to complete
-      const responses = await Promise.all(requests);
-
-      const allProfiles: any[] = [];
-      for (const response of responses) {
-        const profiles = await csv().fromString(response.data);
-        allProfiles.push(...profiles);
-      }
-      this.logger.log(
-        `Fetched ${allProfiles.length} profiles from bulk endpoint.`,
-      );
-      return allProfiles;
+      const queryOptions = {
+        modules: ['assetProfile' as const],
+      };
+      const result = await yahooFinance.quoteSummary(symbol, queryOptions);
+      return result.assetProfile;
     } catch (error) {
-      this.logger.error('Error fetching company profiles', error.stack);
+      this.logger.error(
+        `Error fetching company profile for ${symbol}`,
+        error.stack,
+      );
       throw error;
     }
   }
 
-  async getFilteredProfiles(): Promise<any[]> {
-    const profiles = await this.fetchBulkCompanyProfiles();
-    const filteredProfiles = profiles.filter((profile: any) => {
-      const exchange = profile.exchange; // adjust if CSV headers differ
-      const isFund = profile.isFund;
-      return exchange === STOCK_EXCHANGE.NASDAQ && isFund === 'false';
-    });
-
-    this.logger.log(`Filtered ${filteredProfiles.length} profiles.`);
-    return filteredProfiles;
-  }
-
-  async createCompanyProfiles(): Promise<Company[]> {
-    const filteredProfiles = await this.getFilteredProfiles();
-
-    const companiesToSave: Company[] = filteredProfiles.map((profile) => {
-      const company = new Company();
-      company.ticker = profile.symbol;
-      company.name = profile.companyName;
-      company.exchange = profile.exchange;
-      company.sector = profile.sector;
-      company.industry = profile.industry;
-      company.website = profile.website;
-      company.description = profile.description;
-      return company;
-    });
-
-    const chunkSize = 100; // adjust as needed
-    const savedCompanies: Company[] = [];
-    for (let i = 0; i < companiesToSave.length; i += chunkSize) {
-      const chunk = companiesToSave.slice(i, i + chunkSize);
-      const result = await this.companyRepository.save(chunk);
-      savedCompanies.push(...result);
+  private updateCompanyFields(company: Company, profile: any): Company {
+    if (profile.longName && company.name !== profile.longName) {
+      company.name = profile.longName;
     }
-
-    this.logger.log(`Saved ${savedCompanies.length} companies.`);
-    return savedCompanies;
+    if (profile.sector && company.sector !== profile.sector) {
+      company.sector = profile.sector;
+    }
+    if (profile.industry && company.industry !== profile.industry) {
+      company.industry = profile.industry;
+    }
+    if (profile.website && company.website !== profile.website) {
+      company.website = profile.website;
+    }
+    if (
+      profile.longBusinessSummary &&
+      company.description !== profile.longBusinessSummary
+    ) {
+      company.description = profile.longBusinessSummary;
+    }
+    if (
+      profile.companyOfficers?.[0]?.name &&
+      company.ceo !== profile.companyOfficers[0].name
+    ) {
+      company.ceo = profile.companyOfficers[0].name;
+    }
+    if (profile.country && company.country !== profile.country) {
+      company.country = profile.country;
+    }
+    if (
+      profile.fullTimeEmployees &&
+      company.fullTimeEmployees !== profile.fullTimeEmployees.toString()
+    ) {
+      company.fullTimeEmployees = profile.fullTimeEmployees.toString();
+    }
+    if (profile.phone && company.phone !== profile.phone) {
+      company.phone = profile.phone;
+    }
+    if (profile.address1 && company.address !== profile.address1) {
+      company.address = profile.address1;
+    }
+    if (profile.city && company.city !== profile.city) {
+      company.city = profile.city;
+    }
+    if (profile.state && company.state !== profile.state) {
+      company.state = profile.state;
+    }
+    if (profile.zip && company.zip !== profile.zip) {
+      company.zip = profile.zip;
+    }
+    return company;
   }
 
-  /**
-   * Bulk process: create company profiles from filtered bulk data, and then for each
-   * created Company, find the related Stock record by ticker and update it to link the Company.
-   */
-  async createBulkCompanyProfilesAndLinkStocks(): Promise<Company[]> {
-    // 1. Create Company profiles in bulk.
-    const savedCompanies = await this.createCompanyProfiles();
+  async updateCompanyProfile(symbol: string): Promise<Company> {
+    try {
+      // Fetch company profile from API
+      const profile = await this.fetchCompanyProfile(symbol);
 
-    // 2. For each saved company, find and update the related Stock record.
-    for (const company of savedCompanies) {
-      const stock = await this.stockRepository.findOne({
-        where: { ticker: company.ticker },
+      // Skip if profile is empty or missing required data
+      if (!profile || !profile.longName) {
+        this.logger.warn(`Skipping empty profile for ${symbol}`);
+        return null;
+      }
+
+      // Find existing company
+      let company = await this.companyRepository.findOne({
+        where: { ticker: symbol },
       });
+
+      if (company) {
+        // Update existing company
+        company = this.updateCompanyFields(company, profile);
+        this.logger.log(`Updating existing company: ${symbol}`);
+      } else {
+        // Create new company
+        company = new Company();
+        company.ticker = symbol;
+        company.name = profile.longName;
+        company.sector = profile.sector;
+        company.industry = profile.industry;
+        company.website = profile.website;
+        company.description = profile.longBusinessSummary;
+        company.ceo = profile.companyOfficers?.[0]?.name;
+        company.country = profile.country;
+        company.fullTimeEmployees = profile.fullTimeEmployees?.toString();
+        company.phone = profile.phone;
+        company.address = profile.address1;
+        company.city = profile.city;
+        company.state = profile.state;
+        company.zip = profile.zip;
+        this.logger.log(`Creating new company: ${symbol}`);
+      }
+
+      // Set logo URL
+      company.logoUrl = this.getLogoUrl(symbol);
+
+      // Save the company
+      const savedCompany = await this.companyRepository.save(company);
+
+      // Update the related stock record
+      const stock = await this.stockRepository.findOne({
+        where: { ticker: symbol },
+      });
+
       if (stock) {
-        stock.company = company;
-        stock.companyId = company.id;
+        stock.company = savedCompany;
+        stock.companyId = savedCompany.id;
         stock.lastUpdated = new Date();
         await this.stockRepository.save(stock);
-        this.logger.log(`Linked company ${company.ticker} to stock record.`);
-      } else {
-        this.logger.warn(`No stock record found for ticker ${company.ticker}`);
+        this.logger.log(`Linked company ${symbol} to stock record.`);
       }
-    }
 
-    return savedCompanies;
+      return savedCompany;
+    } catch (error) {
+      this.logger.error(
+        `Error updating company profile for ${symbol}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  async updateCompanyLogos(): Promise<void> {
+    try {
+      const companies = await this.companyRepository.find();
+      this.logger.log(`Updating logos for ${companies.length} companies`);
+
+      for (const company of companies) {
+        company.logoUrl = this.getLogoUrl(company.ticker);
+      }
+
+      await this.companyRepository.save(companies);
+      this.logger.log('Successfully updated company logos');
+    } catch (error) {
+      this.logger.error('Error updating company logos', error.stack);
+      throw error;
+    }
   }
 }

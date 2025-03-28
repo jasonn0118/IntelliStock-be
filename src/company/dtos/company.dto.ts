@@ -5,9 +5,6 @@ export class CompanyDto {
   name: string;
 
   @Expose()
-  exchange: string;
-
-  @Expose()
   industry: string;
 
   @Expose()
@@ -18,4 +15,28 @@ export class CompanyDto {
 
   @Expose()
   description: string;
+
+  @Expose()
+  ceo: string;
+
+  @Expose()
+  country: string;
+
+  @Expose()
+  fullTimeEmployees: string;
+
+  @Expose()
+  phone: string;
+
+  @Expose()
+  address: string;
+
+  @Expose()
+  city: string;
+
+  @Expose()
+  state: string;
+
+  @Expose()
+  zip: string;
 }

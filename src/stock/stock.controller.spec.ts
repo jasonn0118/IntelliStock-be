@@ -1,10 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { Company } from '../company/company.entity';
 import { MarketSummaryResponseDto } from './dtos/market-summary.dto';
 import { SearchStockDto } from './dtos/search-stock.dto';
 import { StockDataScheduler } from './scheduler/stock-data.scheduler';
 import { MarketCacheService } from './services/market-cache.service';
-import { Stock } from './stock.entity';
 import { StocksController } from './stocks.controller';
 import { StocksService } from './stocks.service';
 
@@ -223,37 +221,75 @@ describe('StocksController', () => {
   });
 
   describe('getStock', () => {
-    it('should return stock data', async () => {
-      const mockCompany: Company = {
-        id: 1,
-        ticker: 'AAPL',
-        name: 'Apple Inc.',
-        exchange: 'NASDAQ',
-        industry: 'Technology',
-        sector: 'Consumer Electronics',
-        website: 'https://www.apple.com',
-        description: 'Technology company',
-        stock: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      const mockStock: Stock = {
+    it('should return stock data for a valid ticker', async () => {
+      const mockStock = {
         id: '1',
         ticker: 'AAPL',
-        name: 'Apple Inc.',
         exchange: 'NASDAQ',
+        name: 'Apple Inc.',
         lastUpdated: new Date(),
-        quotes: [],
         companyId: 1,
-        company: mockCompany,
         watchListEntries: [],
+        company: {
+          id: 1,
+          ticker: 'AAPL',
+          name: 'Apple Inc.',
+          industry: 'Technology',
+          sector: 'Consumer Electronics',
+          website: 'https://www.apple.com',
+          description:
+            'Apple Inc. designs, manufactures, and markets mobile communication and media devices.',
+          ceo: 'Tim Cook',
+          country: 'US',
+          fullTimeEmployees: '147000',
+          phone: '1-408-996-1010',
+          address: 'One Apple Park Way',
+          city: 'Cupertino',
+          state: 'CA',
+          zip: '95014',
+          logoUrl: 'https://example.com/logo.png',
+          stock: null,
+          stocks: [],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        quotes: [
+          {
+            id: '1',
+            date: new Date(),
+            open: 150.0,
+            dayHigh: 155.0,
+            dayLow: 149.0,
+            yearLow: 140.0,
+            yearHigh: 160.0,
+            price: 153.0,
+            priceAvg50: 148.0,
+            priceAvg200: 145.0,
+            adjClose: 153.0,
+            volume: 1000000,
+            avgVolume: 950000,
+            change: 3.0,
+            changesPercentage: 2.0,
+            eps: 6.0,
+            pe: 25.5,
+            marketCap: 2500000000000,
+            previousClose: 150.0,
+            earningsAnnouncement: new Date(),
+            sharesOutstanding: 16000000000,
+            timestamp: new Date(),
+            stock: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      mockStocksService.getStock.mockResolvedValue(mockStock);
+
+      jest.spyOn(service, 'getStock').mockResolvedValue(mockStock);
 
       const result = await controller.getStock('AAPL');
+
       expect(result).toEqual(mockStock);
       expect(service.getStock).toHaveBeenCalledWith('AAPL');
     });
@@ -263,37 +299,30 @@ describe('StocksController', () => {
     it('should return top stocks by market cap and gainers', async () => {
       const mockMarketCapStocks = [
         {
-          stock: { ticker: 'AAPL', name: 'Apple Inc.' },
+          symbol: 'AAPL',
+          name: 'Apple Inc.',
           price: 150.25,
           marketCap: 2500000000000,
           changesPercentage: 1.5,
+          logoUrl:
+            'https://img.logo.dev/ticker/aapl?format=webp&retina=true&token=xxx',
         },
       ];
 
       const mockGainerStocks = [
         {
-          stock: { ticker: 'MSFT', name: 'Microsoft Corporation' },
+          symbol: 'MSFT',
+          name: 'Microsoft Corporation',
           price: 300.5,
           changesPercentage: 2.5,
+          logoUrl:
+            'https://img.logo.dev/ticker/msft?format=webp&retina=true&token=xxx',
         },
       ];
 
       const expectedResponse = {
-        marketCap: mockMarketCapStocks.map((quote) => ({
-          symbol: quote.stock.ticker,
-          name: quote.stock.name,
-          price: quote.price,
-          marketCap: quote.marketCap,
-          changesPercentage: quote.changesPercentage,
-          stock: quote.stock,
-        })),
-        gainers: mockGainerStocks.map((quote) => ({
-          symbol: quote.stock.ticker,
-          name: quote.stock.name,
-          price: quote.price,
-          changesPercentage: quote.changesPercentage,
-          stock: quote.stock,
-        })),
+        marketCap: mockMarketCapStocks,
+        gainers: mockGainerStocks,
       };
 
       mockMarketCacheService.getCachedMarketData.mockResolvedValue(null);

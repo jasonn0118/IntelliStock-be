@@ -10,6 +10,7 @@ import {
   formatTrillion,
   formatVolume,
 } from '../../utils/formatData';
+import { CompaniesService } from '../company/companies.service';
 import { EmbeddingsService } from '../embedding/embeddings.service';
 import { StockQuote } from '../stockquote/stock-quote.entity';
 import { STOCK_EXCHANGE, STOCK_TYPE } from './constants';
@@ -89,6 +90,7 @@ export class StocksService {
     private readonly configService: ConfigService,
     private readonly embeddingsService: EmbeddingsService,
     private readonly aiMarketAnalysisService: AiMarketAnalysisService,
+    private readonly companiesService: CompaniesService,
   ) {}
 
   async importStockList(): Promise<void> {
@@ -208,6 +210,7 @@ export class StocksService {
     return this.stockQuoteRepository
       .createQueryBuilder('sq')
       .innerJoinAndSelect('sq.stock', 's')
+      .leftJoinAndSelect('s.company', 'c')
       .where('sq.date = :date', { date: latestQuoteDate.maxDate })
       .andWhere('sq.marketCap > 100000000')
       .andWhere('sq.marketCap IS NOT NULL')
@@ -247,6 +250,7 @@ export class StocksService {
     return this.stockQuoteRepository
       .createQueryBuilder('sq')
       .innerJoinAndSelect('sq.stock', 's')
+      .leftJoinAndSelect('s.company', 'c')
       .where('sq.date = :date', { date: latestQuoteDate.maxDate })
       .andWhere('sq.marketCap > 100000000')
       .andWhere('sq.marketCap IS NOT NULL')
@@ -267,11 +271,40 @@ export class StocksService {
     return stocks.map((stock) => stock.ticker);
   }
 
+  /**
+   * Get detailed stock information by ticker symbol
+   * @param ticker Stock ticker symbol
+   * @returns Stock entity with company details and latest quote
+   */
   async getStock(ticker: string): Promise<Stock> {
-    return this.stockRepository.findOne({
+    const stock = await this.stockRepository.findOne({
       where: { ticker },
       relations: ['company'],
     });
+
+    if (!stock) {
+      return null;
+    }
+
+    const latestQuoteDate = await this.stockQuoteRepository
+      .createQueryBuilder('sq')
+      .select('MAX(sq.date)', 'maxDate')
+      .getRawOne();
+
+    if (latestQuoteDate?.maxDate) {
+      const latestQuote = await this.stockQuoteRepository.findOne({
+        where: {
+          stock: { ticker },
+          date: latestQuoteDate.maxDate,
+        },
+      });
+
+      if (latestQuote) {
+        stock.quotes = [latestQuote];
+      }
+    }
+
+    return stock;
   }
 
   /**
@@ -377,9 +410,6 @@ export class StocksService {
         );
         continue;
       }
-      this.logger.log({
-        quoteDate,
-      });
       const existingQuote = await this.stockQuoteRepository.findOne({
         where: { date: quoteDate, stock: { ticker: quote.symbol } },
       });
@@ -391,6 +421,15 @@ export class StocksService {
       });
 
       if (!stock) continue;
+
+      // Update company profile if needed
+      try {
+        await this.companiesService.updateCompanyProfile(quote.symbol);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to update company profile for ${quote.symbol}: ${error.message}`,
+        );
+      }
 
       const newQuote = new StockQuote();
       newQuote.date = quoteDate;
@@ -1100,7 +1139,7 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
             price: quote.price,
             marketCap: quote.marketCap,
             changesPercentage: quote.changesPercentage,
-            stock: quote.stock,
+            logoUrl: quote.stock.company?.logoUrl,
           }),
       ),
       gainers: gainerStocks.map(
@@ -1110,7 +1149,7 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
             name: quote.stock.name,
             price: quote.price,
             changesPercentage: quote.changesPercentage,
-            stock: quote.stock,
+            logoUrl: quote.stock.company?.logoUrl,
           }),
       ),
     };
