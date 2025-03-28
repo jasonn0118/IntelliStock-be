@@ -286,18 +286,34 @@ export class StocksService {
       return null;
     }
 
+    // Get the latest quote date
     const latestQuoteDate = await this.stockQuoteRepository
       .createQueryBuilder('sq')
       .select('MAX(sq.date)', 'maxDate')
       .getRawOne();
 
     if (latestQuoteDate?.maxDate) {
-      const latestQuote = await this.stockQuoteRepository.findOne({
+      // Try to get the latest quote for this stock
+      let latestQuote = await this.stockQuoteRepository.findOne({
         where: {
           stock: { ticker },
           date: latestQuoteDate.maxDate,
         },
       });
+
+      // If no quote found for the max date, get the next latest record
+      if (!latestQuote) {
+        this.logger.log(
+          `No quote found for ${ticker} on ${latestQuoteDate.maxDate}. Fetching next latest record.`,
+        );
+        latestQuote = await this.stockQuoteRepository
+          .createQueryBuilder('sq')
+          .innerJoinAndSelect('sq.stock', 's')
+          .where('s.ticker = :ticker', { ticker })
+          .orderBy('sq.date', 'DESC')
+          .limit(1)
+          .getOne();
+      }
 
       if (latestQuote) {
         stock.quotes = [latestQuote];
