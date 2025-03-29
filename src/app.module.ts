@@ -10,6 +10,7 @@ import { DatabaseModule } from './database/database.module';
 import { DocumentModule } from './document/document.module';
 import { EmbeddingModule } from './embedding/embedding.module';
 import { StockModule } from './stock/stock.module';
+import { StockStatisticModule } from './stockstatistic/stock-statistic.module';
 import { UserModule } from './users/user.module';
 import { WatchlistModule } from './watchlist/watchlist.module';
 
@@ -28,6 +29,7 @@ import { WatchlistModule } from './watchlist/watchlist.module';
     WatchlistModule,
     DocumentModule,
     EmbeddingModule,
+    StockStatisticModule,
   ],
   controllers: [AppController],
   providers: [

@@ -112,7 +112,7 @@ export class StocksController {
     description: 'Stock not found',
   })
   async getStock(@Param('ticker') ticker: string): Promise<StockDto> {
-    return this.stocksService.getStock(ticker);
+    return await this.stocksService.getStock(ticker);
   }
 
   // FIXME: Remove below these endpoints eventually
