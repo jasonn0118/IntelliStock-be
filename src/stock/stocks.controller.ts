@@ -105,7 +105,7 @@ export class StocksController {
   @ApiResponse({
     status: 200,
     description:
-      'Returns detailed stock information including company details, latest quote, and AI-generated analysis',
+      'Returns detailed stock information including company details, latest quote, and AI-generated analysis in both markdown and structured JSON formats',
     type: StockDto,
   })
   @ApiResponse({
@@ -125,7 +125,12 @@ export class StocksController {
     Object.assign(stockDto, stock);
 
     // Generate analysis
-    stockDto.analysis = await this.stocksService.generateStockAnalysis(stock);
+    const analysisResult =
+      await this.stocksService.generateStockAnalysis(stock);
+
+    // Set the analysis as properties on the DTO
+    stockDto.analysis = analysisResult.analysisMarkdown;
+    stockDto.structuredAnalysis = analysisResult.analysisStructured;
 
     return stockDto;
   }

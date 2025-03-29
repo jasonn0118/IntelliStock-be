@@ -1323,12 +1323,47 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
   /**
    * Generate stock analysis based on stock data
    * @param stock Stock entity with quotes and statistics
-   * @returns AI-generated analysis
+   * @returns Object with structured JSON and Markdown formatted analysis
    */
-  async generateStockAnalysis(stock: Stock): Promise<string> {
+  async generateStockAnalysis(stock: Stock): Promise<{
+    analysisMarkdown: string;
+    analysisStructured: {
+      ticker: string;
+      analysis: {
+        companyProfile: string;
+        valuation: string;
+        performance: string;
+        ownership: string;
+        shortInterest: string;
+        strengthsAndRisks: string;
+        summary: string;
+        sentiment:
+          | 'very_bearish'
+          | 'bearish'
+          | 'neutral'
+          | 'bullish'
+          | 'very_bullish';
+      };
+    };
+  }> {
     try {
       if (!stock || !stock.quotes || stock.quotes.length === 0) {
-        return 'Insufficient data available to generate analysis.';
+        return {
+          analysisMarkdown: 'Insufficient data available to generate analysis.',
+          analysisStructured: {
+            ticker: stock?.ticker || 'Unknown',
+            analysis: {
+              companyProfile: `${stock?.name || 'Unknown'} (${stock?.ticker || 'Unknown'})`,
+              valuation: 'Insufficient data',
+              performance: 'Insufficient data',
+              ownership: 'Insufficient data',
+              shortInterest: 'Insufficient data',
+              strengthsAndRisks: 'Insufficient data available',
+              summary: 'Insufficient data available to generate analysis.',
+              sentiment: 'neutral',
+            },
+          },
+        };
       }
 
       const latestQuote = stock.quotes[0];
@@ -1342,16 +1377,163 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
         stock,
         latestQuote,
         statistic,
+        true, // Request structured JSON output
       );
 
       // Use existing AI market analysis service which should already have OpenAI integration
       const analysis =
         await this.aiMarketAnalysisService.generateCustomAnalysis(prompt);
 
-      return analysis || 'Analysis generation failed. Please try again later.';
+      // Parse the response to extract JSON and markdown portions
+      const markdownResponse = this.cleanMarkdownResponse(analysis);
+      const structuredResponse = this.extractStructuredData(
+        analysis,
+        stock,
+        latestQuote,
+        statistic,
+      );
+
+      return {
+        analysisMarkdown: markdownResponse,
+        analysisStructured: structuredResponse,
+      };
     } catch (error) {
       this.logger.error(`Error generating stock analysis: ${error.message}`);
-      return 'An error occurred while generating the analysis.';
+      return {
+        analysisMarkdown: 'An error occurred while generating the analysis.',
+        analysisStructured: {
+          ticker: stock?.ticker || 'Unknown',
+          analysis: {
+            companyProfile: `${stock?.name || 'Unknown'} (${stock?.ticker || 'Unknown'})`,
+            valuation: 'Error generating analysis',
+            performance: 'Error generating analysis',
+            ownership: 'Error generating analysis',
+            shortInterest: 'Error generating analysis',
+            strengthsAndRisks: 'Error generating analysis',
+            summary: 'An error occurred while generating the analysis.',
+            sentiment: 'neutral',
+          },
+        },
+      };
+    }
+  }
+
+  /**
+   * Clean and format the markdown response
+   */
+  private cleanMarkdownResponse(response: string): string {
+    // Remove any JSON blocks
+    const cleanMarkdown = response
+      .replace(/```json\n[\s\S]*?\n```/g, '')
+      .trim();
+
+    // Add header if not present
+    if (!cleanMarkdown.startsWith('#')) {
+      return `## Stock Analysis\n\n${cleanMarkdown}`;
+    }
+
+    return cleanMarkdown;
+  }
+
+  /**
+   * Extract structured data from the response
+   */
+  private extractStructuredData(
+    response: string,
+    stock: Stock,
+    quote: StockQuote,
+    statistic: StockStatistic | null,
+  ): {
+    ticker: string;
+    analysis: {
+      companyProfile: string;
+      valuation: string;
+      performance: string;
+      ownership: string;
+      shortInterest: string;
+      strengthsAndRisks: string;
+      summary: string;
+      sentiment:
+        | 'very_bearish'
+        | 'bearish'
+        | 'neutral'
+        | 'bullish'
+        | 'very_bullish';
+    };
+  } {
+    try {
+      // Try to extract a JSON block if it exists
+      const jsonMatch = response.match(/```json\n([\s\S]*?)\n```/);
+
+      if (jsonMatch && jsonMatch[1]) {
+        try {
+          const jsonData = JSON.parse(jsonMatch[1]);
+          // Check if the JSON has the expected structure
+          if (jsonData.ticker && jsonData.analysis) {
+            return jsonData;
+          }
+        } catch (jsonError) {
+          this.logger.warn(`Failed to parse JSON: ${jsonError.message}`);
+        }
+      }
+
+      // If no valid JSON found or it doesn't have the expected structure,
+      // create a structured response from the markdown content
+      return {
+        ticker: stock.ticker,
+        analysis: {
+          companyProfile: this.extractSectionFromMarkdown(response, [
+            'company profile',
+            'company',
+            'profile',
+            'overview',
+          ]),
+          valuation: this.extractSectionFromMarkdown(response, [
+            'valuation',
+            'financials',
+            'ratios',
+          ]),
+          performance: this.extractSectionFromMarkdown(response, [
+            'performance',
+            'price',
+            'trend',
+          ]),
+          ownership: this.extractSectionFromMarkdown(response, [
+            'ownership',
+            'insider',
+            'institutional',
+          ]),
+          shortInterest: this.extractSectionFromMarkdown(response, [
+            'short interest',
+            'short',
+            'interest',
+          ]),
+          strengthsAndRisks:
+            this.extractStrengthsAndRisksFromMarkdown(response),
+          summary:
+            this.extractSectionFromMarkdown(response, [
+              'summary',
+              'conclusion',
+              'overall',
+            ]) || this.createSummaryFromText(response),
+          sentiment: this.determineSentimentFromText(response),
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Error extracting structured data: ${error.message}`);
+      return {
+        ticker: stock.ticker,
+        analysis: {
+          companyProfile: `${stock.name} (${stock.ticker}) is a ${stock.company?.industry || 'company'} in the ${stock.company?.sector || 'market'}.`,
+          valuation: `Current price: $${quote.price || 'N/A'}. Market cap: $${quote.marketCap ? (Number(quote.marketCap) / 1000000).toFixed(2) + 'M' : 'N/A'}.`,
+          performance: `${stock.ticker} has changed by ${quote.changesPercentage ? Number(quote.changesPercentage).toFixed(2) + '%' : 'N/A'} recently.`,
+          ownership: 'Ownership data extraction failed.',
+          shortInterest: 'Short interest data extraction failed.',
+          strengthsAndRisks: 'Unable to analyze strengths and risks.',
+          summary: 'Error occurred while parsing the analysis.',
+          sentiment: 'neutral',
+        },
+      };
     }
   }
 
@@ -1362,6 +1544,7 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
     stock: Stock,
     quote: StockQuote,
     statistic: StockStatistic | null,
+    structuredOutput: boolean = false,
   ): string {
     // Safely handle date
     let dateStr = '';
@@ -1473,8 +1656,8 @@ Fiscal Dates:
 - Most Recent Quarter: ${mostRecentQuarterStr}`;
     }
 
-    // Build the complete prompt
-    return `You are a professional financial analyst.
+    // Base prompt
+    let prompt = `You are a professional financial analyst.
 
 Generate a concise analysis report of the stock **${stock.name} (${stock.ticker})** using the data provided below. Highlight:
 - Company profile (industry, sector, business model)
@@ -1492,7 +1675,343 @@ ${companyInfo}
 
 ${quoteInfo}${statisticsInfo}
 
----
-Respond with a detailed summary suitable for investors evaluating this stock.`;
+---`;
+
+    // Add structured output instructions
+    if (structuredOutput) {
+      prompt += `
+Your response should include two parts:
+
+1. A comprehensive markdown-formatted analysis with the following clear structure:
+
+## Company Profile
+[Write a paragraph about the company, its industry, sector, and business model]
+
+## Valuation Analysis
+[Write a paragraph analyzing valuation metrics, PE ratio, price/book, etc.]
+
+## Recent Performance
+[Write a paragraph on recent price action, volume, trends, and volatility]
+
+## Ownership Structure
+[Write a paragraph about insider and institutional ownership]
+
+## Short Interest
+[Write a paragraph analyzing short interest data, if available]
+
+## Strengths
+- [Key strength point 1]
+- [Key strength point 2]
+- [Key strength point 3 if applicable]
+
+## Risks
+- [Key risk factor 1]
+- [Key risk factor 2]
+- [Key risk factor 3 if applicable]
+
+## Summary
+[Write a concise summary paragraph with overall sentiment]
+
+2. A simplified JSON object at the end of your response in the following format (enclosed in \`\`\`json ... \`\`\` code block):
+
+\`\`\`json
+{
+  "ticker": "${stock.ticker}",
+  "analysis": {
+    "companyProfile": "Summary of company profile section",
+    "valuation": "Summary of valuation section",
+    "performance": "Summary of performance section",
+    "ownership": "Summary of ownership section",
+    "shortInterest": "Summary of short interest section",
+    "strengthsAndRisks": "Combined summary of strengths and risks",
+    "summary": "Overall conclusion",
+    "sentiment": "bullish" | "bearish" | "neutral" | "very_bullish" | "very_bearish"
+  }
+}
+\`\`\`
+
+The JSON should contain concise text summaries of each section, better with numerical data.
+`;
+    } else {
+      prompt += `Respond with a detailed summary suitable for investors evaluating this stock.`;
+    }
+
+    return prompt;
+  }
+
+  /**
+   * Extract a section from markdown text based on headings
+   */
+  private extractSectionFromMarkdown(
+    text: string,
+    possibleHeadings: string[],
+  ): string {
+    const lines = text.split('\n');
+    let extractedContent = '';
+    let inSection = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      const lowerLine = line.toLowerCase();
+
+      // Check if line contains a heading indicator
+      const isHeading =
+        line.startsWith('#') ||
+        (i > 0 &&
+          (lines[i - 1].startsWith('===') || lines[i - 1].startsWith('---')));
+
+      // If it's a heading, check if it's one we're looking for
+      if (
+        isHeading &&
+        possibleHeadings.some((heading) =>
+          lowerLine.includes(heading.toLowerCase()),
+        )
+      ) {
+        inSection = true;
+        continue;
+      }
+
+      // If it's a heading but not one we're looking for, end the section
+      if (isHeading && inSection) {
+        break;
+      }
+
+      // Add content if we're in a relevant section
+      if (inSection && line.length > 0) {
+        // Skip markdown link syntax and bullet points
+        const cleanLine = line
+          .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+          .replace(/^[*-] /, '');
+        extractedContent += cleanLine + ' ';
+      }
+    }
+
+    return extractedContent.trim() || `No information available`;
+  }
+
+  /**
+   * Extract strengths and risks from markdown text
+   */
+  private extractStrengthsAndRisksFromMarkdown(text: string): string {
+    const strengths = this.extractInsightsFromText(text, 'strength');
+    const risks = this.extractInsightsFromText(text, 'risk');
+
+    let result = '';
+    if (strengths.length > 0) {
+      result += 'Strengths: ' + strengths.join('; ') + '. ';
+    }
+
+    if (risks.length > 0) {
+      result += 'Risks: ' + risks.join('; ') + '.';
+    }
+
+    return result.trim() || 'No specific strengths or risks identified.';
+  }
+
+  /**
+   * Create a brief summary from the text
+   */
+  private createSummaryFromText(text: string): string {
+    // First try to find a conclusion paragraph
+    const conclusionMatch = text.match(
+      /(?:conclusion|summary|overall).*?:(.*?)(?:$|\n\n)/i,
+    );
+    if (conclusionMatch && conclusionMatch[1]) {
+      return conclusionMatch[1].trim();
+    }
+
+    // Otherwise use the first couple sentences
+    const sentences = text.split(/[.!?]/).filter((s) => s.trim().length > 10);
+    if (sentences.length > 0) {
+      return sentences.slice(0, 2).join('.') + '.';
+    }
+
+    return 'No summary available.';
+  }
+
+  /**
+   * Extract insights (strengths/risks) from analysis text
+   */
+  private extractInsightsFromText(
+    text: string,
+    type: 'strength' | 'risk',
+  ): string[] {
+    const insights: string[] = [];
+
+    // Look for bullet points that might indicate strengths or risks
+    const lines = text.split('\n');
+    let inSection = false;
+
+    for (const line of lines) {
+      const lowerLine = line.toLowerCase();
+
+      // Check if we're entering a relevant section
+      if (
+        (type === 'strength' &&
+          (lowerLine.includes('strength') ||
+            lowerLine.includes('advantage') ||
+            lowerLine.includes('positive') ||
+            lowerLine.includes('bullish'))) ||
+        (type === 'risk' &&
+          (lowerLine.includes('risk') ||
+            lowerLine.includes('challenge') ||
+            lowerLine.includes('concern') ||
+            lowerLine.includes('weakness') ||
+            lowerLine.includes('bearish')))
+      ) {
+        inSection = true;
+        continue;
+      }
+
+      // Check if we're leaving a section (entering a new one)
+      if (
+        inSection &&
+        (line.includes('# ') ||
+          line.includes('## ') ||
+          (type === 'strength' && lowerLine.includes('risk')) ||
+          (type === 'risk' && lowerLine.includes('conclusion')))
+      ) {
+        inSection = false;
+      }
+
+      // Capture bullet points while in a relevant section
+      if (
+        inSection &&
+        (line.trim().startsWith('-') || line.trim().startsWith('*'))
+      ) {
+        const point = line.trim().substring(1).trim();
+        if (point.length > 5) {
+          // Ensure it's substantive
+          insights.push(point);
+        }
+      }
+    }
+
+    // If no structured points found, use heuristics to extract insights
+    if (insights.length === 0) {
+      const keywords =
+        type === 'strength'
+          ? [
+              'strong',
+              'positive',
+              'advantage',
+              'growth',
+              'increasing',
+              'improvement',
+            ]
+          : [
+              'risk',
+              'challenge',
+              'concern',
+              'weakness',
+              'decline',
+              'decreasing',
+              'negative',
+            ];
+
+      const sentences = text.split(/[.!?]/).filter((s) => s.trim().length > 10);
+
+      for (const sentence of sentences) {
+        const lowerSentence = sentence.toLowerCase();
+        if (keywords.some((keyword) => lowerSentence.includes(keyword))) {
+          insights.push(sentence.trim());
+          if (insights.length >= 3) break; // Limit to 3 if extracting this way
+        }
+      }
+    }
+
+    return insights.length > 0
+      ? insights
+      : [
+          type === 'strength'
+            ? 'No clear strengths identified'
+            : 'No clear risks identified',
+        ];
+  }
+
+  /**
+   * Determine sentiment from analysis text
+   */
+  private determineSentimentFromText(
+    text: string,
+  ): 'very_bearish' | 'bearish' | 'neutral' | 'bullish' | 'very_bullish' {
+    const lowerText = text.toLowerCase();
+
+    // Count sentiment indicators
+    const bearishTerms = [
+      'bearish',
+      'negative',
+      'concern',
+      'risk',
+      'overvalued',
+      'decline',
+      'weak',
+      'sell',
+      'avoid',
+    ];
+    const bullishTerms = [
+      'bullish',
+      'positive',
+      'strong',
+      'growth',
+      'undervalued',
+      'opportunity',
+      'buy',
+      'recommend',
+    ];
+    const veryBearishTerms = [
+      'significant risk',
+      'highly overvalued',
+      'strong sell',
+      'dangerous',
+      'severe decline',
+    ];
+    const veryBullishTerms = [
+      'strong buy',
+      'highly undervalued',
+      'exceptional growth',
+      'outstanding opportunity',
+    ];
+
+    let bearishCount = bearishTerms.reduce(
+      (count, term) =>
+        count + (lowerText.match(new RegExp(term, 'g')) || []).length,
+      0,
+    );
+
+    let bullishCount = bullishTerms.reduce(
+      (count, term) =>
+        count + (lowerText.match(new RegExp(term, 'g')) || []).length,
+      0,
+    );
+
+    const veryBearishCount = veryBearishTerms.reduce(
+      (count, term) =>
+        count + (lowerText.match(new RegExp(term, 'g')) || []).length,
+      0,
+    );
+
+    const veryBullishCount = veryBullishTerms.reduce(
+      (count, term) =>
+        count + (lowerText.match(new RegExp(term, 'g')) || []).length,
+      0,
+    );
+
+    // Add weighted counts for very bearish/bullish terms
+    bearishCount += veryBearishCount * 2;
+    bullishCount += veryBullishCount * 2;
+
+    // Determine sentiment based on counts
+    if (veryBearishCount >= 2 || bearishCount > bullishCount + 5) {
+      return 'very_bearish';
+    } else if (veryBullishCount >= 2 || bullishCount > bearishCount + 5) {
+      return 'very_bullish';
+    } else if (bearishCount > bullishCount + 2) {
+      return 'bearish';
+    } else if (bullishCount > bearishCount + 2) {
+      return 'bullish';
+    } else {
+      return 'neutral';
+    }
   }
 }
