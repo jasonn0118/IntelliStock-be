@@ -883,8 +883,8 @@ export class StocksService {
 
     validGainers.forEach((quote, index) => {
       gainersSummaryText += `${index + 1}. ${quote.stock.ticker} (${quote.stock.name})\n`;
-      gainersSummaryText += `   Price: $${Number(quote.price).toFixed(2)} | Change: +$${Number(quote.change).toFixed(2)} (+${Number(quote.changesPercentage).toFixed(2)}%)\n`;
-      gainersSummaryText += `   Volume: ${(Number(quote.volume) / 1000000).toFixed(2)}M | Market Cap: $${(Number(quote.marketCap) / 1000000000).toFixed(2)}B\n\n`;
+      gainersSummaryText += `   Price: $${typeof quote.price === 'number' ? quote.price.toFixed(2) : Number(quote.price).toFixed(2) || 'N/A'} | Change: +$${typeof quote.change === 'number' ? quote.change.toFixed(2) : Number(quote.change).toFixed(2) || 'N/A'} (+${typeof quote.changesPercentage === 'number' ? quote.changesPercentage.toFixed(2) : Number(quote.changesPercentage).toFixed(2) || 'N/A'}%)\n`;
+      gainersSummaryText += `   Volume: ${quote.volume ? (Number(quote.volume) / 1000000).toFixed(2) + 'M' : 'N/A'} | Market Cap: $${quote.marketCap ? (Number(quote.marketCap) / 1000000000).toFixed(2) + 'B' : 'N/A'}\n\n`;
     });
 
     const avgGain =
@@ -931,8 +931,8 @@ export class StocksService {
 
     validLosers.forEach((quote, index) => {
       losersSummaryText += `${index + 1}. ${quote.stock.ticker} (${quote.stock.name})\n`;
-      losersSummaryText += `   Price: $${Number(quote.price).toFixed(2)} | Change: -$${Math.abs(Number(quote.change)).toFixed(2)} (${Number(quote.changesPercentage).toFixed(2)}%)\n`;
-      losersSummaryText += `   Volume: ${(Number(quote.volume) / 1000000).toFixed(2)}M | Market Cap: $${(Number(quote.marketCap) / 1000000000).toFixed(2)}B\n\n`;
+      losersSummaryText += `   Price: $${typeof quote.price === 'number' ? quote.price.toFixed(2) : Number(quote.price).toFixed(2) || 'N/A'} | Change: -$${typeof quote.change === 'number' ? Math.abs(quote.change).toFixed(2) : Math.abs(Number(quote.change)).toFixed(2) || 'N/A'} (${typeof quote.changesPercentage === 'number' ? quote.changesPercentage.toFixed(2) : Number(quote.changesPercentage).toFixed(2) || 'N/A'}%)\n`;
+      losersSummaryText += `   Volume: ${quote.volume ? (Number(quote.volume) / 1000000).toFixed(2) + 'M' : 'N/A'} | Market Cap: $${quote.marketCap ? (Number(quote.marketCap) / 1000000000).toFixed(2) + 'B' : 'N/A'}\n\n`;
     });
 
     const avgLoss =
@@ -1318,5 +1318,181 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
     newQuote.stock = stock;
 
     return newQuote;
+  }
+
+  /**
+   * Generate stock analysis based on stock data
+   * @param stock Stock entity with quotes and statistics
+   * @returns AI-generated analysis
+   */
+  async generateStockAnalysis(stock: Stock): Promise<string> {
+    try {
+      if (!stock || !stock.quotes || stock.quotes.length === 0) {
+        return 'Insufficient data available to generate analysis.';
+      }
+
+      const latestQuote = stock.quotes[0];
+      const statistic =
+        stock.statistics && stock.statistics.length > 0
+          ? stock.statistics[0]
+          : null;
+
+      // Format the prompt with stock data
+      const prompt = this.formatStockAnalysisPrompt(
+        stock,
+        latestQuote,
+        statistic,
+      );
+
+      // Use existing AI market analysis service which should already have OpenAI integration
+      const analysis =
+        await this.aiMarketAnalysisService.generateCustomAnalysis(prompt);
+
+      return analysis || 'Analysis generation failed. Please try again later.';
+    } catch (error) {
+      this.logger.error(`Error generating stock analysis: ${error.message}`);
+      return 'An error occurred while generating the analysis.';
+    }
+  }
+
+  /**
+   * Format the prompt for stock analysis
+   */
+  private formatStockAnalysisPrompt(
+    stock: Stock,
+    quote: StockQuote,
+    statistic: StockStatistic | null,
+  ): string {
+    // Safely handle date
+    let dateStr = '';
+    let formattedDate = '';
+
+    try {
+      // Ensure quote.date is a valid Date object
+      const quoteDate =
+        quote.date instanceof Date ? quote.date : new Date(quote.date);
+
+      dateStr = quoteDate.toISOString().split('T')[0];
+
+      // Format date for display
+      formattedDate = quoteDate.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+    } catch (error) {
+      this.logger.warn(`Error formatting date: ${error.message}`);
+      // Use current date as fallback
+      const today = new Date();
+      dateStr = today.toISOString().split('T')[0];
+      formattedDate = today.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+    }
+
+    // Build company info section
+    const companyInfo = `Company Info:
+- Name: ${stock.name}
+- Exchange: ${stock.exchange || 'NASDAQ'}
+- Ticker: ${stock.ticker}${
+      stock.company
+        ? `
+- Industry: ${stock.company.industry || 'N/A'}
+- Sector: ${stock.company.sector || 'N/A'}
+- Website: ${stock.company.website || 'N/A'}
+- CEO: ${stock.company.ceo || 'N/A'}
+- Description: ${stock.company.description || 'N/A'}
+- Headquarters: ${stock.company.city ? `${stock.company.city}, ${stock.company.state || ''}` : 'N/A'}
+- Employees: ${stock.company.fullTimeEmployees || 'N/A'}`
+        : ''
+    }`;
+
+    // Build quote section
+    const quoteInfo = `Quote (as of ${formattedDate}):
+- Price: $${typeof quote.price === 'number' ? quote.price.toFixed(2) : Number(quote.price).toFixed(2) || 'N/A'} (${quote.changesPercentage >= 0 ? '↑' : '↓'} ${typeof quote.changesPercentage === 'number' ? quote.changesPercentage.toFixed(2) : Number(quote.changesPercentage).toFixed(2) || 'N/A'}%)
+- Market Cap: $${quote.marketCap ? (Number(quote.marketCap) / 1000000).toFixed(2) + 'M' : 'N/A'}
+- 52-Week High/Low: $${quote.yearHigh ? Number(quote.yearHigh).toFixed(2) : 'N/A'} / $${quote.yearLow ? Number(quote.yearLow).toFixed(2) : 'N/A'}
+- Volume: ${quote.volume ? Number(quote.volume).toLocaleString() : 'N/A'} (Avg: ${quote.avgVolume ? Number(quote.avgVolume).toLocaleString() : 'N/A'})
+- EPS: $${quote.eps ? Number(quote.eps).toFixed(2) : 'N/A'}
+- PE Ratio: ${quote.pe ? Number(quote.pe).toFixed(2) : 'N/A'}
+- Previous Close: $${quote.previousClose ? Number(quote.previousClose).toFixed(2) : 'N/A'}
+- PriceAvg50: ${quote.priceAvg50 ? Number(quote.priceAvg50).toFixed(2) : 'N/A'}
+- PriceAvg200: ${quote.priceAvg200 ? Number(quote.priceAvg200).toFixed(2) : 'N/A'}`;
+
+    // Build statistics section if available
+    let statisticsInfo = '';
+    if (statistic) {
+      // Safely handle dates in statistics
+      let lastFiscalYearEndStr = 'N/A';
+      let mostRecentQuarterStr = 'N/A';
+
+      try {
+        if (statistic.lastFiscalYearEnd) {
+          const lastFiscalDate =
+            statistic.lastFiscalYearEnd instanceof Date
+              ? statistic.lastFiscalYearEnd
+              : new Date(statistic.lastFiscalYearEnd);
+          lastFiscalYearEndStr = lastFiscalDate.toISOString().split('T')[0];
+        }
+      } catch (e) {
+        this.logger.warn(`Error formatting lastFiscalYearEnd: ${e.message}`);
+      }
+
+      try {
+        if (statistic.mostRecentQuarter) {
+          const quarterDate =
+            statistic.mostRecentQuarter instanceof Date
+              ? statistic.mostRecentQuarter
+              : new Date(statistic.mostRecentQuarter);
+          mostRecentQuarterStr = quarterDate.toISOString().split('T')[0];
+        }
+      } catch (e) {
+        this.logger.warn(`Error formatting mostRecentQuarter: ${e.message}`);
+      }
+
+      statisticsInfo = `
+Key Statistics:
+- Enterprise Value: $${statistic.enterpriseValue ? (Number(statistic.enterpriseValue) / 1000000).toFixed(2) + 'M' : 'N/A'}
+- Float Shares: ${statistic.floatShares ? (Number(statistic.floatShares) / 1000000).toFixed(2) + 'M' : 'N/A'}
+- Shares Outstanding: ${statistic.sharesOutstanding ? (Number(statistic.sharesOutstanding) / 1000000).toFixed(2) + 'M' : 'N/A'}
+- Insider Ownership: ${statistic.heldPercentInsiders ? (Number(statistic.heldPercentInsiders) * 100).toFixed(2) + '%' : 'N/A'}
+- Institutional Ownership: ${statistic.heldPercentInstitutions ? (Number(statistic.heldPercentInstitutions) * 100).toFixed(2) + '%' : 'N/A'}
+- Short Interest: ${statistic.sharesShort ? Number(statistic.sharesShort).toLocaleString() : 'N/A'} (${statistic.shortPercentOfFloat ? (Number(statistic.shortPercentOfFloat) * 100).toFixed(2) + '% of float' : 'N/A'})
+- Short Ratio: ${statistic.shortRatio ? Number(statistic.shortRatio).toFixed(2) : 'N/A'}
+- Price/Book: ${statistic.priceToBook ? Number(statistic.priceToBook).toFixed(2) : 'N/A'}
+- Enterprise to Revenue: ${statistic.enterpriseToRevenue ? Number(statistic.enterpriseToRevenue).toFixed(2) : 'N/A'}
+- Enterprise to EBITDA: ${statistic.enterpriseToEbitda ? Number(statistic.enterpriseToEbitda).toFixed(2) : 'N/A'}
+- Profit Margin: ${statistic.profitMargins ? (Number(statistic.profitMargins) * 100).toFixed(2) + '%' : 'N/A'}
+- 52-Week Return: ${statistic.weekChange52 ? (Number(statistic.weekChange52) * 100).toFixed(2) + '%' : 'N/A'}
+- S&P 52-Week Return: ${statistic.spWeekChange52 ? (Number(statistic.spWeekChange52) * 100).toFixed(2) + '%' : 'N/A'}
+
+Fiscal Dates:
+- Last Fiscal Year End: ${lastFiscalYearEndStr}
+- Most Recent Quarter: ${mostRecentQuarterStr}`;
+    }
+
+    // Build the complete prompt
+    return `You are a professional financial analyst.
+
+Generate a concise analysis report of the stock **${stock.name} (${stock.ticker})** using the data provided below. Highlight:
+- Company profile (industry, sector, business model)
+- Valuation and key ratios
+- Recent performance (price, volume, volatility)
+- Insider/institutional ownership insights
+- Short interest overview
+- Strengths and risks
+- Overall sentiment
+
+Only use the data provided. Be objective and use financial terminology.
+
+---
+${companyInfo}
+
+${quoteInfo}${statisticsInfo}
+
+---
+Respond with a detailed summary suitable for investors evaluating this stock.`;
   }
 }

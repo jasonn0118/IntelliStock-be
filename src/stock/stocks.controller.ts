@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Logger,
+  NotFoundException,
   Param,
   Post,
   Query,
@@ -104,7 +105,7 @@ export class StocksController {
   @ApiResponse({
     status: 200,
     description:
-      'Returns detailed stock information including company details and latest quote',
+      'Returns detailed stock information including company details, latest quote, and AI-generated analysis',
     type: StockDto,
   })
   @ApiResponse({
@@ -112,7 +113,21 @@ export class StocksController {
     description: 'Stock not found',
   })
   async getStock(@Param('ticker') ticker: string): Promise<StockDto> {
-    return await this.stocksService.getStock(ticker);
+    // Get stock data
+    const stock = await this.stocksService.getStock(ticker);
+
+    if (!stock) {
+      throw new NotFoundException(`Stock with ticker ${ticker} not found`);
+    }
+
+    // Create StockDto
+    const stockDto = new StockDto();
+    Object.assign(stockDto, stock);
+
+    // Generate analysis
+    stockDto.analysis = await this.stocksService.generateStockAnalysis(stock);
+
+    return stockDto;
   }
 
   // FIXME: Remove below these endpoints eventually

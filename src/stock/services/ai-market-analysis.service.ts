@@ -114,4 +114,33 @@ export class AiMarketAnalysisService {
       };
     }
   }
+
+  /**
+   * Generate a custom analysis based on a provided prompt
+   * @param prompt The complete prompt to send to the AI
+   * @returns A string containing the analysis
+   */
+  async generateCustomAnalysis(prompt: string): Promise<string> {
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a professional financial analyst specializing in stock analysis.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 1500,
+        temperature: 0.7,
+      });
+
+      const content = response.choices[0].message.content.trim();
+      return content;
+    } catch (error) {
+      this.logger.error(`Error generating custom analysis: ${error.message}`);
+      return `Analysis unavailable. Error: ${error.message}`;
+    }
+  }
 }
