@@ -1546,34 +1546,8 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
     statistic: StockStatistic | null,
     structuredOutput: boolean = false,
   ): string {
-    // Safely handle date
     let dateStr = '';
     let formattedDate = '';
-
-    try {
-      // Ensure quote.date is a valid Date object
-      const quoteDate =
-        quote.date instanceof Date ? quote.date : new Date(quote.date);
-
-      dateStr = quoteDate.toISOString().split('T')[0];
-
-      // Format date for display
-      formattedDate = quoteDate.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      });
-    } catch (error) {
-      this.logger.warn(`Error formatting date: ${error.message}`);
-      // Use current date as fallback
-      const today = new Date();
-      dateStr = today.toISOString().split('T')[0];
-      formattedDate = today.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      });
-    }
 
     // Build company info section
     const companyInfo = `Company Info:
@@ -1593,16 +1567,16 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
     }`;
 
     // Build quote section
-    const quoteInfo = `Quote (as of ${formattedDate}):
-- Price: $${typeof quote.price === 'number' ? quote.price.toFixed(2) : Number(quote.price).toFixed(2) || 'N/A'} (${quote.changesPercentage >= 0 ? '↑' : '↓'} ${typeof quote.changesPercentage === 'number' ? quote.changesPercentage.toFixed(2) : Number(quote.changesPercentage).toFixed(2) || 'N/A'}%)
+    const quoteInfo = `Quote (as of ${quote.date || new Date(quote.timestamp).toISOString().split('T')[0]}):
+- Price: $${quote.price.toFixed(2) || 'N/A'} (${quote.changesPercentage >= 0 ? '↑' : '↓'} ${quote.changesPercentage.toFixed(2) || 'N/A'}%)
 - Market Cap: $${quote.marketCap ? (Number(quote.marketCap) / 1000000).toFixed(2) + 'M' : 'N/A'}
-- 52-Week High/Low: $${quote.yearHigh ? Number(quote.yearHigh).toFixed(2) : 'N/A'} / $${quote.yearLow ? Number(quote.yearLow).toFixed(2) : 'N/A'}
-- Volume: ${quote.volume ? Number(quote.volume).toLocaleString() : 'N/A'} (Avg: ${quote.avgVolume ? Number(quote.avgVolume).toLocaleString() : 'N/A'})
-- EPS: $${quote.eps ? Number(quote.eps).toFixed(2) : 'N/A'}
-- PE Ratio: ${quote.pe ? Number(quote.pe).toFixed(2) : 'N/A'}
-- Previous Close: $${quote.previousClose ? Number(quote.previousClose).toFixed(2) : 'N/A'}
-- PriceAvg50: ${quote.priceAvg50 ? Number(quote.priceAvg50).toFixed(2) : 'N/A'}
-- PriceAvg200: ${quote.priceAvg200 ? Number(quote.priceAvg200).toFixed(2) : 'N/A'}`;
+- 52-Week High/Low: $${quote.yearHigh ? quote.yearHigh.toFixed(2) : 'N/A'} / $${quote.yearLow ? quote.yearLow.toFixed(2) : 'N/A'}
+- Volume: ${quote.volume ? quote.volume.toLocaleString() : 'N/A'} (Avg: ${quote.avgVolume ? quote.avgVolume.toLocaleString() : 'N/A'})
+- EPS: $${quote.eps ? quote.eps.toFixed(2) : 'N/A'}
+- PE Ratio: ${quote.pe ? quote.pe.toFixed(2) : 'N/A'}
+- Previous Close: $${quote.previousClose ? quote.previousClose.toFixed(2) : 'N/A'}
+- PriceAvg50: ${quote.priceAvg50 ? quote.priceAvg50.toFixed(2) : 'N/A'}
+- PriceAvg200: ${quote.priceAvg200 ? quote.priceAvg200.toFixed(2) : 'N/A'}`;
 
     // Build statistics section if available
     let statisticsInfo = '';
@@ -1656,7 +1630,6 @@ Fiscal Dates:
 - Most Recent Quarter: ${mostRecentQuarterStr}`;
     }
 
-    // Base prompt
     let prompt = `You are a professional financial analyst.
 
 Generate a concise analysis report of the stock **${stock.name} (${stock.ticker})** using the data provided below. Highlight:
@@ -1677,7 +1650,6 @@ ${quoteInfo}${statisticsInfo}
 
 ---`;
 
-    // Add structured output instructions
     if (structuredOutput) {
       prompt += `
 Your response should include two parts:
