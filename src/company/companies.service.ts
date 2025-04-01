@@ -42,7 +42,6 @@ export class CompaniesService {
   }
 
   private updateCompanyFields(company: Company, profile: any): Company {
-    // Handle direct name field or longName field (from Yahoo Finance API)
     if (profile.name && company.name !== profile.name) {
       company.name = profile.name;
     } else if (profile.longName && company.name !== profile.longName) {
@@ -61,7 +60,6 @@ export class CompaniesService {
       company.website = profile.website;
     }
 
-    // Handle direct description field or longBusinessSummary field
     if (profile.description && company.description !== profile.description) {
       company.description = profile.description;
     } else if (
@@ -71,7 +69,6 @@ export class CompaniesService {
       company.description = profile.longBusinessSummary;
     }
 
-    // Handle direct CEO field or try to extract from companyOfficers
     if (profile.ceo && company.ceo !== profile.ceo) {
       company.ceo = profile.ceo;
     } else if (
@@ -96,7 +93,6 @@ export class CompaniesService {
       company.phone = profile.phone;
     }
 
-    // Handle direct address field or address1 field
     if (profile.address && company.address !== profile.address) {
       company.address = profile.address;
     } else if (profile.address1 && company.address !== profile.address1) {
