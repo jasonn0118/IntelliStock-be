@@ -1326,7 +1326,6 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
    * @returns Object with structured JSON and Markdown formatted analysis
    */
   async generateStockAnalysis(stock: Stock): Promise<{
-    analysisMarkdown: string;
     analysisStructured: {
       ticker: string;
       analysis: {
@@ -1349,7 +1348,6 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
     try {
       if (!stock || !stock.quotes || stock.quotes.length === 0) {
         return {
-          analysisMarkdown: 'Insufficient data available to generate analysis.',
           analysisStructured: {
             ticker: stock?.ticker || 'Unknown',
             analysis: {
@@ -1377,7 +1375,7 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
         stock,
         latestQuote,
         statistic,
-        true, // Request structured JSON output
+        true,
       );
 
       // Use existing AI market analysis service which should already have OpenAI integration
@@ -1385,7 +1383,6 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
         await this.aiMarketAnalysisService.generateCustomAnalysis(prompt);
 
       // Parse the response to extract JSON and markdown portions
-      const markdownResponse = this.cleanMarkdownResponse(analysis);
       const structuredResponse = this.extractStructuredData(
         analysis,
         stock,
@@ -1394,13 +1391,11 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
       );
 
       return {
-        analysisMarkdown: markdownResponse,
         analysisStructured: structuredResponse,
       };
     } catch (error) {
       this.logger.error(`Error generating stock analysis: ${error.message}`);
       return {
-        analysisMarkdown: 'An error occurred while generating the analysis.',
         analysisStructured: {
           ticker: stock?.ticker || 'Unknown',
           analysis: {
@@ -1416,23 +1411,6 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
         },
       };
     }
-  }
-
-  /**
-   * Clean and format the markdown response
-   */
-  private cleanMarkdownResponse(response: string): string {
-    // Remove any JSON blocks
-    const cleanMarkdown = response
-      .replace(/```json\n[\s\S]*?\n```/g, '')
-      .trim();
-
-    // Add header if not present
-    if (!cleanMarkdown.startsWith('#')) {
-      return `## Stock Analysis\n\n${cleanMarkdown}`;
-    }
-
-    return cleanMarkdown;
   }
 
   /**
@@ -1546,9 +1524,6 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
     statistic: StockStatistic | null,
     structuredOutput: boolean = false,
   ): string {
-    let dateStr = '';
-    let formattedDate = '';
-
     // Build company info section
     const companyInfo = `Company Info:
 - Name: ${stock.name}
@@ -1568,15 +1543,15 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
 
     // Build quote section
     const quoteInfo = `Quote (as of ${quote.date || new Date(quote.timestamp).toISOString().split('T')[0]}):
-- Price: $${quote.price.toFixed(2) || 'N/A'} (${quote.changesPercentage >= 0 ? '↑' : '↓'} ${quote.changesPercentage.toFixed(2) || 'N/A'}%)
+- Price: $${Number(quote.price).toFixed(2)} (${quote.changesPercentage >= 0 ? '↑' : '↓'} ${Number(quote.changesPercentage).toFixed(2)}%)
 - Market Cap: $${quote.marketCap ? (Number(quote.marketCap) / 1000000).toFixed(2) + 'M' : 'N/A'}
-- 52-Week High/Low: $${quote.yearHigh ? quote.yearHigh.toFixed(2) : 'N/A'} / $${quote.yearLow ? quote.yearLow.toFixed(2) : 'N/A'}
-- Volume: ${quote.volume ? quote.volume.toLocaleString() : 'N/A'} (Avg: ${quote.avgVolume ? quote.avgVolume.toLocaleString() : 'N/A'})
-- EPS: $${quote.eps ? quote.eps.toFixed(2) : 'N/A'}
-- PE Ratio: ${quote.pe ? quote.pe.toFixed(2) : 'N/A'}
-- Previous Close: $${quote.previousClose ? quote.previousClose.toFixed(2) : 'N/A'}
-- PriceAvg50: ${quote.priceAvg50 ? quote.priceAvg50.toFixed(2) : 'N/A'}
-- PriceAvg200: ${quote.priceAvg200 ? quote.priceAvg200.toFixed(2) : 'N/A'}`;
+- 52-Week High/Low: $${quote.yearHigh ? Number(quote.yearHigh).toFixed(2) : 'N/A'} / $${quote.yearLow ? Number(quote.yearLow).toFixed(2) : 'N/A'}
+- Volume: ${quote.volume ? Number(quote.volume).toLocaleString() : 'N/A'} (Avg: ${quote.avgVolume ? Number(quote.avgVolume).toLocaleString() : 'N/A'})
+- EPS: $${quote.eps ? Number(quote.eps).toFixed(2) : 'N/A'}
+- PE Ratio: ${quote.pe ? Number(quote.pe).toFixed(2) : 'N/A'}
+- Previous Close: $${quote.previousClose ? Number(quote.previousClose).toFixed(2) : 'N/A'}
+- PriceAvg50: ${quote.priceAvg50 ? Number(quote.priceAvg50).toFixed(2) : 'N/A'}
+- PriceAvg200: ${quote.priceAvg200 ? Number(quote.priceAvg200).toFixed(2) : 'N/A'}`;
 
     // Build statistics section if available
     let statisticsInfo = '';
@@ -1611,23 +1586,23 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
 
       statisticsInfo = `
 Key Statistics:
-- Enterprise Value: $${statistic.enterpriseValue ? (Number(statistic.enterpriseValue) / 1000000).toFixed(2) + 'M' : 'N/A'}
-- Float Shares: ${statistic.floatShares ? (Number(statistic.floatShares) / 1000000).toFixed(2) + 'M' : 'N/A'}
-- Shares Outstanding: ${statistic.sharesOutstanding ? (Number(statistic.sharesOutstanding) / 1000000).toFixed(2) + 'M' : 'N/A'}
-- Insider Ownership: ${statistic.heldPercentInsiders ? (Number(statistic.heldPercentInsiders) * 100).toFixed(2) + '%' : 'N/A'}
-- Institutional Ownership: ${statistic.heldPercentInstitutions ? (Number(statistic.heldPercentInstitutions) * 100).toFixed(2) + '%' : 'N/A'}
-- Short Interest: ${statistic.sharesShort ? Number(statistic.sharesShort).toLocaleString() : 'N/A'} (${statistic.shortPercentOfFloat ? (Number(statistic.shortPercentOfFloat) * 100).toFixed(2) + '% of float' : 'N/A'})
-- Short Ratio: ${statistic.shortRatio ? Number(statistic.shortRatio).toFixed(2) : 'N/A'}
-- Price/Book: ${statistic.priceToBook ? Number(statistic.priceToBook).toFixed(2) : 'N/A'}
-- Enterprise to Revenue: ${statistic.enterpriseToRevenue ? Number(statistic.enterpriseToRevenue).toFixed(2) : 'N/A'}
-- Enterprise to EBITDA: ${statistic.enterpriseToEbitda ? Number(statistic.enterpriseToEbitda).toFixed(2) : 'N/A'}
-- Profit Margin: ${statistic.profitMargins ? (Number(statistic.profitMargins) * 100).toFixed(2) + '%' : 'N/A'}
-- 52-Week Return: ${statistic.weekChange52 ? (Number(statistic.weekChange52) * 100).toFixed(2) + '%' : 'N/A'}
-- S&P 52-Week Return: ${statistic.spWeekChange52 ? (Number(statistic.spWeekChange52) * 100).toFixed(2) + '%' : 'N/A'}
+Enterprise Value: $${statistic.enterpriseValue ? (Number(statistic.enterpriseValue) / 1000000).toFixed(2) + 'M' : 'N/A'}
+Float Shares: ${statistic.floatShares ? (Number(statistic.floatShares) / 1000000).toFixed(2) + 'M' : 'N/A'}
+Shares Outstanding: ${statistic.sharesOutstanding ? (Number(statistic.sharesOutstanding) / 1000000).toFixed(2) + 'M' : 'N/A'}
+Insider Ownership: ${statistic.heldPercentInsiders ? (Number(statistic.heldPercentInsiders) * 100).toFixed(2) + '%' : 'N/A'}
+Institutional Ownership: ${statistic.heldPercentInstitutions ? (Number(statistic.heldPercentInstitutions) * 100).toFixed(2) + '%' : 'N/A'}
+Short Interest: ${statistic.sharesShort ? Number(statistic.sharesShort).toLocaleString() : 'N/A'} (${statistic.shortPercentOfFloat ? (Number(statistic.shortPercentOfFloat) * 100).toFixed(2) + '% of float' : 'N/A'})
+Short Ratio: ${statistic.shortRatio ? Number(statistic.shortRatio).toFixed(2) : 'N/A'}
+Price/Book: ${statistic.priceToBook ? Number(statistic.priceToBook).toFixed(2) : 'N/A'}
+Enterprise to Revenue: ${statistic.enterpriseToRevenue ? Number(statistic.enterpriseToRevenue).toFixed(2) : 'N/A'}
+Enterprise to EBITDA: ${statistic.enterpriseToEbitda ? Number(statistic.enterpriseToEbitda).toFixed(2) : 'N/A'}
+Profit Margin: ${statistic.profitMargins ? (Number(statistic.profitMargins) * 100).toFixed(2) + '%' : 'N/A'}
+52-Week Return: ${statistic.weekChange52 ? (Number(statistic.weekChange52) * 100).toFixed(2) + '%' : 'N/A'}
+S&P 52-Week Return: ${statistic.spWeekChange52 ? (Number(statistic.spWeekChange52) * 100).toFixed(2) + '%' : 'N/A'}
 
 Fiscal Dates:
-- Last Fiscal Year End: ${lastFiscalYearEndStr}
-- Most Recent Quarter: ${mostRecentQuarterStr}`;
+Last Fiscal Year End: ${lastFiscalYearEndStr}
+Most Recent Quarter: ${mostRecentQuarterStr}`;
     }
 
     let prompt = `You are a professional financial analyst.

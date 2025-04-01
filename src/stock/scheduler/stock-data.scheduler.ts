@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { StockDto } from '../dtos/stock.dto';
 import { MarketCacheService } from '../services/market-cache.service';
 import { StocksService } from '../stocks.service';
 
@@ -78,6 +79,7 @@ export class StockDataScheduler {
     try {
       this.logger.log('Starting midnight EST cache refresh...');
 
+      // Refresh market summary
       const marketSummary = await this.stocksService.getMarketSummary(
         new Date(),
       );
@@ -86,8 +88,37 @@ export class StockDataScheduler {
         marketSummary,
       );
 
+      // Refresh top stocks
       const topStocks = await this.stocksService.getTopStocks();
       await this.marketCacheService.cacheMarketData('top-stocks', topStocks);
+
+      // Refresh individual stock data for top stocks
+      const topStockTickers = [
+        ...topStocks.marketCap.map((stock) => stock.symbol),
+        ...topStocks.gainers.map((stock) => stock.symbol),
+      ];
+
+      for (const ticker of topStockTickers) {
+        try {
+          const stock = await this.stocksService.getStock(ticker);
+          if (stock) {
+            const stockDto = new StockDto();
+            Object.assign(stockDto, stock);
+            const analysisResult =
+              await this.stocksService.generateStockAnalysis(stock);
+            stockDto.structuredAnalysis = analysisResult.analysisStructured;
+            await this.marketCacheService.cacheMarketData(
+              `stock-${ticker}`,
+              stockDto,
+            );
+          }
+        } catch (error) {
+          this.logger.error(
+            `Failed to refresh cache for stock ${ticker}:`,
+            error,
+          );
+        }
+      }
 
       this.logger.log('Successfully refreshed market cache at midnight EST');
     } catch (error) {

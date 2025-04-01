@@ -20,7 +20,7 @@ import { WatchlistModule } from './watchlist/watchlist.module';
     ConfigModule.forRoot({ isGlobal: true }),
     CacheModule.register({
       isGlobal: true,
-      ttl: 60 * 60,
+      ttl: 24 * 60 * 60,
     }),
     UserModule,
     AuthModule,

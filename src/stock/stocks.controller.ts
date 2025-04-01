@@ -113,6 +113,12 @@ export class StocksController {
     description: 'Stock not found',
   })
   async getStock(@Param('ticker') ticker: string): Promise<StockDto> {
+    const cacheKey = `stock-${ticker}`;
+    const cached = await this.marketCacheService.getCachedMarketData(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     // Get stock data
     const stock = await this.stocksService.getStock(ticker);
 
@@ -129,8 +135,10 @@ export class StocksController {
       await this.stocksService.generateStockAnalysis(stock);
 
     // Set the analysis as properties on the DTO
-    stockDto.analysis = analysisResult.analysisMarkdown;
     stockDto.structuredAnalysis = analysisResult.analysisStructured;
+
+    // Cache the result
+    await this.marketCacheService.cacheMarketData(cacheKey, stockDto);
 
     return stockDto;
   }
