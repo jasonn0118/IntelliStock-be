@@ -20,7 +20,8 @@ import { WatchlistModule } from './watchlist/watchlist.module';
     ConfigModule.forRoot({ isGlobal: true }),
     CacheModule.register({
       isGlobal: true,
-      ttl: 24 * 60 * 60,
+      ttl: 24 * 60 * 60, // 24 hours in seconds
+      max: 100, // maximum number of items in cache
     }),
     UserModule,
     AuthModule,

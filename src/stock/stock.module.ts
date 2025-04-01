@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Stock } from './stock.entity';
 
 import { HttpModule } from '@nestjs/axios';
+import { CacheModule } from '@nestjs/cache-manager';
 import { ScheduleModule } from '@nestjs/schedule';
 import { Document } from 'src/document/document.entity';
 import { EmbeddingsService } from 'src/embedding/embeddings.service';
@@ -22,6 +23,10 @@ import { StocksService } from './stocks.service';
     ScheduleModule.forRoot(),
     HttpModule,
     CompanyModule,
+    CacheModule.register({
+      ttl: 24 * 60 * 60, // 24 hours
+      max: 100,
+    }),
   ],
   controllers: [StocksController],
   providers: [

@@ -79,7 +79,6 @@ export class StockDataScheduler {
     try {
       this.logger.log('Starting midnight EST cache refresh...');
 
-      // Refresh market summary
       const marketSummary = await this.stocksService.getMarketSummary(
         new Date(),
       );
@@ -88,11 +87,9 @@ export class StockDataScheduler {
         marketSummary,
       );
 
-      // Refresh top stocks
       const topStocks = await this.stocksService.getTopStocks();
       await this.marketCacheService.cacheMarketData('top-stocks', topStocks);
 
-      // Refresh individual stock data for top stocks
       const topStockTickers = [
         ...topStocks.marketCap.map((stock) => stock.symbol),
         ...topStocks.gainers.map((stock) => stock.symbol),

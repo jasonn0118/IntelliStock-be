@@ -316,6 +316,18 @@ export class StocksService {
   }
 
   /**
+   * Get static stock information by ticker symbol
+   * @param ticker Stock ticker symbol
+   * @returns Stock entity with only static information (no quotes or statistics)
+   */
+  async getStockStatic(ticker: string): Promise<Stock> {
+    return this.stockRepository.findOne({
+      where: { ticker },
+      relations: ['company'],
+    });
+  }
+
+  /**
    * Search for stocks by ticker symbol or company name
    * @param query Search query string
    * @returns Array of SearchStockDto objects with matching stocks

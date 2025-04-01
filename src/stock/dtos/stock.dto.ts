@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Expose, Type } from 'class-transformer';
-import { StockStatisticDto } from 'src/stockstatistic/dtos/stock-statistic.dto';
+import { StockStatisticDto } from '../../stockstatistic/dtos/stock-statistic.dto';
 import { CompanyDto } from '../../company/dtos/company.dto';
 import { StockQuoteDto } from './stock-quote.dto';
 
