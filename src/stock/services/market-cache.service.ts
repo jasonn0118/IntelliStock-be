@@ -23,14 +23,17 @@ export class MarketCacheService {
     return tomorrow;
   }
 
-  async cacheMarketData(key: string, data: any): Promise<void> {
+  async cacheMarketData(
+    key: string,
+    data: any,
+    ttlSeconds?: number,
+  ): Promise<void> {
     try {
       const nextMidnight = this.getNextMidnight();
-      const ttlSeconds = Math.floor(
-        (nextMidnight.getTime() - Date.now()) / 1000,
-      );
+      const ttl =
+        ttlSeconds || Math.floor((nextMidnight.getTime() - Date.now()) / 1000);
 
-      await this.cacheManager.set(key, data, ttlSeconds);
+      await this.cacheManager.set(key, data, ttl);
       this.logger.log(`Cached ${key} until ${nextMidnight.toISOString()}`);
     } catch (error) {
       this.logger.error(`Failed to cache ${key}:`, error);

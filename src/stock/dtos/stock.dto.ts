@@ -1,91 +1,59 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Expose, Type } from 'class-transformer';
+import { StockStatisticDto } from '../../stockstatistic/dtos/stock-statistic.dto';
 import { CompanyDto } from '../../company/dtos/company.dto';
+import { StockQuoteDto } from './stock-quote.dto';
 
-export class StockQuoteDto {
-  @ApiProperty({ description: 'Quote date' })
-  @Expose()
-  date: Date;
+// Define structured analysis interface
+export class StockAnalysisDto {
+  @ApiProperty({ description: 'Stock ticker symbol' })
+  ticker: string;
 
-  @ApiProperty({ description: 'Opening price' })
-  @Expose()
-  open: number;
-
-  @ApiProperty({ description: 'Highest price of the day' })
-  @Expose()
-  dayHigh: number;
-
-  @ApiProperty({ description: 'Lowest price of the day' })
-  @Expose()
-  dayLow: number;
-
-  @ApiProperty({ description: '52-week low price' })
-  @Expose()
-  yearLow: number;
-
-  @ApiProperty({ description: '52-week high price' })
-  @Expose()
-  yearHigh: number;
-
-  @ApiProperty({ description: 'Current price' })
-  @Expose()
-  price: number;
-
-  @ApiProperty({ description: '50-day moving average price' })
-  @Expose()
-  priceAvg50: number;
-
-  @ApiProperty({ description: '200-day moving average price' })
-  @Expose()
-  priceAvg200: number;
-
-  @ApiProperty({ description: 'Adjusted closing price' })
-  @Expose()
-  adjClose: number;
-
-  @ApiProperty({ description: 'Trading volume' })
-  @Expose()
-  volume: number;
-
-  @ApiProperty({ description: 'Average trading volume' })
-  @Expose()
-  avgVolume: number;
-
-  @ApiProperty({ description: 'Price change' })
-  @Expose()
-  change: number;
-
-  @ApiProperty({ description: 'Percentage price change' })
-  @Expose()
-  changesPercentage: number;
-
-  @ApiProperty({ description: 'Earnings per share' })
-  @Expose()
-  eps: number;
-
-  @ApiProperty({ description: 'Price-to-earnings ratio' })
-  @Expose()
-  pe: number;
-
-  @ApiProperty({ description: 'Market capitalization' })
-  @Expose()
-  marketCap: number;
-
-  @ApiProperty({ description: 'Previous day closing price' })
-  @Expose()
-  previousClose: number;
-
-  @ApiProperty({ description: 'Earnings announcement date' })
-  @Expose()
-  earningsAnnouncement: Date;
-
-  @ApiProperty({ description: 'Number of shares outstanding' })
-  @Expose()
-  sharesOutstanding: number;
-
-  @ApiProperty({ description: 'Quote timestamp' })
-  @Expose()
-  timestamp: Date;
+  @ApiProperty({
+    description: 'Analysis content sections',
+    type: 'object',
+    properties: {
+      companyProfile: {
+        type: 'string',
+        description: 'Company profile summary',
+      },
+      valuation: { type: 'string', description: 'Valuation metrics summary' },
+      performance: {
+        type: 'string',
+        description: 'Performance metrics summary',
+      },
+      ownership: { type: 'string', description: 'Ownership data summary' },
+      shortInterest: {
+        type: 'string',
+        description: 'Short interest data summary',
+      },
+      strengthsAndRisks: {
+        type: 'string',
+        description: 'Strengths and risks assessment',
+      },
+      summary: { type: 'string', description: 'Overall summary' },
+      sentiment: {
+        type: 'string',
+        description: 'Overall sentiment',
+        enum: ['very_bearish', 'bearish', 'neutral', 'bullish', 'very_bullish'],
+      },
+    },
+  })
+  analysis: {
+    companyProfile: string;
+    valuation: string;
+    performance: string;
+    ownership: string;
+    shortInterest: string;
+    strengthsAndRisks: string;
+    summary: string;
+    sentiment:
+      | 'very_bearish'
+      | 'bearish'
+      | 'neutral'
+      | 'bullish'
+      | 'very_bullish';
+  };
 }
 
 export class StockDto {
@@ -114,8 +82,33 @@ export class StockDto {
   @Type(() => CompanyDto)
   company: CompanyDto;
 
-  @ApiProperty({ description: 'Latest stock quote', type: StockQuoteDto })
+  @ApiProperty({ description: 'Latest stock quote', type: [StockQuoteDto] })
   @Expose()
   @Type(() => StockQuoteDto)
   quotes: StockQuoteDto[];
+
+  @ApiProperty({
+    description: 'Latest stock statistics',
+    type: StockStatisticDto,
+  })
+  @Expose()
+  @Type(() => StockStatisticDto)
+  statistic: StockStatisticDto;
+
+  @ApiProperty({
+    description: 'AI-generated stock analysis in markdown format',
+    example:
+      '## 📊 Tesla, Inc. (TSLA) Analysis\n\n### 🏢 Company Profile\nTesla operates in...',
+    required: false,
+  })
+  @Expose()
+  analysis?: string;
+
+  @ApiProperty({
+    description: 'Structured AI-generated stock analysis in JSON format',
+    type: StockAnalysisDto,
+    required: false,
+  })
+  @Expose()
+  structuredAnalysis?: StockAnalysisDto;
 }

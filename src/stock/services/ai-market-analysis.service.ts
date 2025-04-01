@@ -48,16 +48,16 @@ export class AiMarketAnalysisService {
         Generate a market analysis for ${exchange} on ${formattedDate} based on the following data:
         
         Composite Index:
-        - Price: ${compositeIndex.price}
-        - Change: ${compositeIndex.change}
-        - Change Percent: ${compositeIndex.changePercent}%
-        - Volume: ${compositeIndex.volume}
+        - Price: ${Number(compositeIndex.price).toFixed(2)}
+        - Change: ${Number(compositeIndex.change).toFixed(2)}
+        - Change Percent: ${Number(compositeIndex.changePercent).toFixed(2)}%
+        - Volume: ${this.formatLargeNumber(compositeIndex.volume)}
         
         Market Statistics:
-        - Total Market Cap: ${stats.totalMarketCap}
-        - Market Cap Change: ${stats.marketCapChangePercent}%
-        - Average P/E Ratio: ${stats.averagePE}
-        - Total Volume: ${stats.totalVolume}
+        - Total Market Cap: ${this.formatLargeNumber(stats.totalMarketCap)}
+        - Market Cap Change: ${Number(stats.marketCapChangePercent).toFixed(2)}%
+        - Average P/E Ratio: ${Number(stats.averagePE).toFixed(2)}
+        - Total Volume: ${this.formatLargeNumber(stats.totalVolume)}
         - Advancing Stocks: ${stats.advancingStocks}
         - Declining Stocks: ${stats.decliningStocks}
         - Unchanged Stocks: ${stats.unchangedStocks}
@@ -67,7 +67,7 @@ export class AiMarketAnalysisService {
         - Advancing Count: ${breadth.advancingCount}
         - Declining Count: ${breadth.decliningCount}
         - Unchanged Count: ${breadth.unchangedCount}
-        - Advance/Decline Ratio: ${breadth.advanceDeclineRatio}
+        - Advance/Decline Ratio: ${Number(breadth.advanceDeclineRatio).toFixed(2)}
         
         Provide a market analysis in JSON format with the following structure:
         {
@@ -112,6 +112,52 @@ export class AiMarketAnalysisService {
         keyPointsToWatch: 'Data unavailable',
         recommendations: 'Data unavailable',
       };
+    }
+  }
+
+  /**
+   * Generate a custom analysis based on a provided prompt
+   * @param prompt The complete prompt to send to the AI
+   * @returns A string containing the analysis
+   */
+  async generateCustomAnalysis(prompt: string): Promise<string> {
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a professional financial analyst specializing in stock analysis.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 1500,
+        temperature: 0.7,
+      });
+
+      const content = response.choices[0].message.content.trim();
+      return content;
+    } catch (error) {
+      this.logger.error(`Error generating custom analysis: ${error.message}`);
+      return `Analysis unavailable. Error: ${error.message}`;
+    }
+  }
+
+  /**
+   * Format large numbers to use M (millions), B (billions), or T (trillions) suffixes
+   */
+  private formatLargeNumber(num: number): string {
+    if (num === null || num === undefined || isNaN(num)) return 'N/A';
+
+    if (num >= 1e12) {
+      return `${(num / 1e12).toFixed(2)}T`;
+    } else if (num >= 1e9) {
+      return `${(num / 1e9).toFixed(2)}B`;
+    } else if (num >= 1e6) {
+      return `${(num / 1e6).toFixed(2)}M`;
+    } else {
+      return num.toFixed(2);
     }
   }
 }

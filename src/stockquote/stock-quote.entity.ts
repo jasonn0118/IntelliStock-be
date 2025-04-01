@@ -3,10 +3,12 @@ import {
   CreateDateColumn,
   Entity,
   ManyToOne,
+  OneToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { Stock } from '../stock/stock.entity';
+import { StockStatistic } from '../stockstatistic/stock-statistic.entity';
 
 @Entity()
 export class StockQuote {
@@ -78,6 +80,9 @@ export class StockQuote {
 
   @ManyToOne(() => Stock, (stock) => stock.quotes, { onDelete: 'CASCADE' })
   stock: Stock;
+
+  @OneToOne(() => StockStatistic, (statistic) => statistic.quote)
+  statistic: StockStatistic;
 
   @CreateDateColumn()
   createdAt: Date;

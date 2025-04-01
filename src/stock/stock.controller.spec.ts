@@ -1,6 +1,9 @@
+import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { MarketSummaryResponseDto } from './dtos/market-summary.dto';
 import { SearchStockDto } from './dtos/search-stock.dto';
+import { StockDynamicDto } from './dtos/stock-dynamic.dto';
+import { StockStaticDto } from './dtos/stock-static.dto';
 import { StockDataScheduler } from './scheduler/stock-data.scheduler';
 import { MarketCacheService } from './services/market-cache.service';
 import { StocksController } from './stocks.controller';
@@ -14,6 +17,7 @@ describe('StocksController', () => {
     getMarketSummary: jest.fn(),
     searchStocks: jest.fn(),
     getStock: jest.fn(),
+    getStockStatic: jest.fn(),
     getTopStocksByMarketCap: jest.fn(),
     getTopGainers: jest.fn(),
     getTopLosers: jest.fn(),
@@ -22,6 +26,7 @@ describe('StocksController', () => {
     fetchAndSaveDailyQuotes: jest.fn(),
     generateAndStoreMarketSummaries: jest.fn(),
     getTopStocks: jest.fn(),
+    generateStockAnalysis: jest.fn(),
   };
 
   const mockStockDataScheduler = {
@@ -220,81 +225,6 @@ describe('StocksController', () => {
     });
   });
 
-  describe('getStock', () => {
-    it('should return stock data for a valid ticker', async () => {
-      const mockStock = {
-        id: '1',
-        ticker: 'AAPL',
-        exchange: 'NASDAQ',
-        name: 'Apple Inc.',
-        lastUpdated: new Date(),
-        companyId: 1,
-        watchListEntries: [],
-        company: {
-          id: 1,
-          ticker: 'AAPL',
-          name: 'Apple Inc.',
-          industry: 'Technology',
-          sector: 'Consumer Electronics',
-          website: 'https://www.apple.com',
-          description:
-            'Apple Inc. designs, manufactures, and markets mobile communication and media devices.',
-          ceo: 'Tim Cook',
-          country: 'US',
-          fullTimeEmployees: '147000',
-          phone: '1-408-996-1010',
-          address: 'One Apple Park Way',
-          city: 'Cupertino',
-          state: 'CA',
-          zip: '95014',
-          logoUrl: 'https://example.com/logo.png',
-          stock: null,
-          stocks: [],
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        quotes: [
-          {
-            id: '1',
-            date: new Date(),
-            open: 150.0,
-            dayHigh: 155.0,
-            dayLow: 149.0,
-            yearLow: 140.0,
-            yearHigh: 160.0,
-            price: 153.0,
-            priceAvg50: 148.0,
-            priceAvg200: 145.0,
-            adjClose: 153.0,
-            volume: 1000000,
-            avgVolume: 950000,
-            change: 3.0,
-            changesPercentage: 2.0,
-            eps: 6.0,
-            pe: 25.5,
-            marketCap: 2500000000000,
-            previousClose: 150.0,
-            earningsAnnouncement: new Date(),
-            sharesOutstanding: 16000000000,
-            timestamp: new Date(),
-            stock: null,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          },
-        ],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      jest.spyOn(service, 'getStock').mockResolvedValue(mockStock);
-
-      const result = await controller.getStock('AAPL');
-
-      expect(result).toEqual(mockStock);
-      expect(service.getStock).toHaveBeenCalledWith('AAPL');
-    });
-  });
-
   describe('getTopStocks', () => {
     it('should return top stocks by market cap and gainers', async () => {
       const mockMarketCapStocks = [
@@ -370,6 +300,122 @@ describe('StocksController', () => {
       expect(
         mockStockDataScheduler.handleGenerateMarketSummaries,
       ).toHaveBeenCalled();
+    });
+  });
+
+  describe('getStockStatic', () => {
+    it('should return static stock data for a valid ticker', async () => {
+      const mockStock = {
+        id: '1',
+        ticker: 'AAPL',
+        exchange: 'NASDAQ',
+        name: 'Apple Inc.',
+        company: {
+          id: 1,
+          name: 'Apple Inc.',
+          industry: 'Technology',
+          sector: 'Consumer Electronics',
+          description:
+            'Apple Inc. designs, manufactures, and markets smartphones, personal computers, tablets, wearables, and accessories worldwide.',
+        },
+      };
+
+      const expectedResponse = new StockStaticDto();
+      Object.assign(expectedResponse, {
+        id: mockStock.id,
+        ticker: mockStock.ticker,
+        name: mockStock.name,
+        exchange: mockStock.exchange,
+        company: mockStock.company,
+      });
+
+      const cacheKey = 'stock-static-AAPL';
+      mockMarketCacheService.getCachedMarketData.mockResolvedValue(null);
+      mockStocksService.getStockStatic.mockResolvedValue(mockStock);
+      mockMarketCacheService.cacheMarketData.mockResolvedValue(undefined);
+
+      const result = await controller.getStockStatic('AAPL');
+
+      expect(result).toEqual(expectedResponse);
+      expect(mockStocksService.getStockStatic).toHaveBeenCalledWith('AAPL');
+      expect(mockMarketCacheService.cacheMarketData).toHaveBeenCalledWith(
+        cacheKey,
+        expectedResponse,
+        7 * 24 * 60 * 60,
+      );
+    });
+
+    it('should throw NotFoundException when ticker is not found', async () => {
+      mockMarketCacheService.getCachedMarketData.mockResolvedValue(null);
+      mockStocksService.getStockStatic.mockResolvedValue(null);
+
+      await expect(controller.getStockStatic('INVALID')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mockStocksService.getStockStatic).toHaveBeenCalledWith('INVALID');
+    });
+  });
+
+  describe('getStockDynamic', () => {
+    it('should return dynamic stock data for a valid ticker', async () => {
+      const mockStock = {
+        id: '1',
+        ticker: 'AAPL',
+        quotes: [{ price: 150, changesPercentage: 1.5 }],
+        statistics: [{ enterpriseValue: 2600000000000 }],
+      };
+
+      const mockAnalysis = {
+        analysisStructured: {
+          summary: 'Mock analysis summary',
+          strengths: ['Strength 1', 'Strength 2'],
+          risks: ['Risk 1', 'Risk 2'],
+        },
+      };
+
+      const expectedResponse = new StockDynamicDto();
+      Object.assign(expectedResponse, {
+        quotes: mockStock.quotes,
+        statistics: mockStock.statistics,
+        structuredAnalysis: mockAnalysis.analysisStructured,
+        lastUpdated: expect.any(Date),
+      });
+
+      const cacheKey = 'stock-dynamic-AAPL';
+      mockMarketCacheService.getCachedMarketData.mockResolvedValue(null);
+      mockStocksService.getStock.mockResolvedValue(mockStock);
+      mockStocksService.generateStockAnalysis.mockResolvedValue(mockAnalysis);
+      mockMarketCacheService.cacheMarketData.mockResolvedValue(undefined);
+
+      const result = await controller.getStockDynamic('AAPL');
+
+      expect(result).toMatchObject({
+        quotes: expectedResponse.quotes,
+        statistics: expectedResponse.statistics,
+        structuredAnalysis: expectedResponse.structuredAnalysis,
+      });
+      expect(mockStocksService.getStock).toHaveBeenCalledWith('AAPL');
+      expect(mockStocksService.generateStockAnalysis).toHaveBeenCalledWith(
+        mockStock,
+      );
+      expect(mockMarketCacheService.cacheMarketData).toHaveBeenCalledWith(
+        cacheKey,
+        expect.objectContaining({
+          quotes: expectedResponse.quotes,
+          statistics: expectedResponse.statistics,
+          structuredAnalysis: expectedResponse.structuredAnalysis,
+        }),
+      );
+    });
+
+    it('should throw NotFoundException when ticker is not found', async () => {
+      mockMarketCacheService.getCachedMarketData.mockResolvedValue(null);
+      mockStocksService.getStock.mockResolvedValue(null);
+
+      await expect(controller.getStockDynamic('INVALID')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mockStocksService.getStock).toHaveBeenCalledWith('INVALID');
     });
   });
 });

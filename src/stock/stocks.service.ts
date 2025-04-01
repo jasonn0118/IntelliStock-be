@@ -11,8 +11,11 @@ import {
   formatVolume,
 } from '../../utils/formatData';
 import { CompaniesService } from '../company/companies.service';
+import { Company } from '../company/company.entity';
 import { EmbeddingsService } from '../embedding/embeddings.service';
 import { StockQuote } from '../stockquote/stock-quote.entity';
+import { StockStatistic } from '../stockstatistic/stock-statistic.entity';
+import { StockStatisticService } from '../stockstatistic/stock-statistic.service';
 import { STOCK_EXCHANGE, STOCK_TYPE } from './constants';
 import { MarketBreadthDto, MarketStatsDto } from './dtos/market-stats.dto';
 import { MarketSummaryResponseDto } from './dtos/market-summary.dto';
@@ -86,11 +89,14 @@ export class StocksService {
     private stockRepository: Repository<Stock>,
     @InjectRepository(StockQuote)
     private stockQuoteRepository: Repository<StockQuote>,
+    @InjectRepository(StockStatistic)
+    private stockStatisticRepository: Repository<StockStatistic>,
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
     private readonly embeddingsService: EmbeddingsService,
     private readonly aiMarketAnalysisService: AiMarketAnalysisService,
     private readonly companiesService: CompaniesService,
+    private readonly stockStatisticService: StockStatisticService,
   ) {}
 
   async importStockList(): Promise<void> {
@@ -125,7 +131,7 @@ export class StocksService {
     try {
       const url = `${this.baseUrl}/symbol/NASDAQ?apikey=${this.configService.get<string>('FMP_API_KEY')}`;
       const response = await firstValueFrom(this.httpService.get(url));
-      const allQuotes = response.data;
+      const allQuotes: Record<string, unknown>[] = response.data;
 
       const batchSize = 200;
       const quoteBatches = this.splitIntoBatches(allQuotes, batchSize);
@@ -274,9 +280,10 @@ export class StocksService {
   /**
    * Get detailed stock information by ticker symbol
    * @param ticker Stock ticker symbol
-   * @returns Stock entity with company details and latest quote
+   * @returns Stock entity with company details, latest quote, and statistics
    */
   async getStock(ticker: string): Promise<Stock> {
+    // Find the stock with eager loading of company
     const stock = await this.stockRepository.findOne({
       where: { ticker },
       relations: ['company'],
@@ -286,25 +293,38 @@ export class StocksService {
       return null;
     }
 
-    const latestQuoteDate = await this.stockQuoteRepository
+    // Get the latest quote with statistics in a single query
+    const latestQuote = await this.stockQuoteRepository
       .createQueryBuilder('sq')
-      .select('MAX(sq.date)', 'maxDate')
-      .getRawOne();
+      .innerJoinAndSelect('sq.stock', 's')
+      .leftJoinAndSelect('sq.statistic', 'ss') // Use the one-to-one relationship
+      .where('s.ticker = :ticker', { ticker })
+      .orderBy('sq.date', 'DESC')
+      .limit(1)
+      .getOne();
 
-    if (latestQuoteDate?.maxDate) {
-      const latestQuote = await this.stockQuoteRepository.findOne({
-        where: {
-          stock: { ticker },
-          date: latestQuoteDate.maxDate,
-        },
-      });
+    if (latestQuote) {
+      stock.quotes = [latestQuote];
 
-      if (latestQuote) {
-        stock.quotes = [latestQuote];
+      // If we have a statistic attached to this quote, add it to the stock
+      if (latestQuote.statistic) {
+        stock.statistics = [latestQuote.statistic];
       }
     }
 
     return stock;
+  }
+
+  /**
+   * Get static stock information by ticker symbol
+   * @param ticker Stock ticker symbol
+   * @returns Stock entity with only static information (no quotes or statistics)
+   */
+  async getStockStatic(ticker: string): Promise<Stock> {
+    return this.stockRepository.findOne({
+      where: { ticker },
+      relations: ['company'],
+    });
   }
 
   /**
@@ -397,12 +417,16 @@ export class StocksService {
     return batches;
   }
 
-  private async processQuoteBatch(quotes: any[]): Promise<void> {
-    const quotesToSave: StockQuote[] = [];
-
+  /**
+   * Process a batch of quotes from the API
+   * @param quotes Array of quotes to process
+   */
+  private async processQuoteBatch(
+    quotes: Record<string, unknown>[],
+  ): Promise<void> {
     for (const quote of quotes) {
       const quoteDate = quote.timestamp
-        ? new Date(quote.timestamp * 1000)
+        ? new Date((quote.timestamp as number) * 1000)
         : null;
       if (!quoteDate || isNaN(quoteDate.getTime())) {
         this.logger.warn(
@@ -411,97 +435,227 @@ export class StocksService {
         continue;
       }
       const existingQuote = await this.stockQuoteRepository.findOne({
-        where: { date: quoteDate, stock: { ticker: quote.symbol } },
+        where: { date: quoteDate, stock: { ticker: quote.symbol as string } },
       });
 
       if (existingQuote) continue;
 
       const stock = await this.stockRepository.findOne({
-        where: { ticker: quote.symbol },
+        where: { ticker: quote.symbol as string },
       });
 
       if (!stock) continue;
 
-      // Update company profile if needed
       try {
-        await this.companiesService.updateCompanyProfile(quote.symbol);
+        const yahooData = await yahooFinance.quoteSummary(
+          quote.symbol as string,
+          {
+            modules: ['defaultKeyStatistics', 'assetProfile'],
+          },
+        );
+
+        const [savedQuote, quoteEmbeddingText] = await this.processYahooData(
+          quote,
+          stock,
+          quoteDate,
+          yahooData,
+        );
+
+        await this.saveEmbedding(
+          quoteEmbeddingText,
+          quote.symbol as string,
+          quoteDate,
+          'Yahoo Finance API and Financial Modeling Prep API',
+          0.9,
+        );
+      } catch (yahooError) {
+        this.logger.warn(
+          `Failed to fetch Yahoo Finance data for ${quote.symbol}: ${yahooError.message}`,
+        );
+
+        const newQuote = this.createBasicQuote(quote, stock, quoteDate);
+
+        // Save the quote to the database
+        const savedQuote = await this.stockQuoteRepository.save(newQuote);
+
+        const basicEmbeddingText = this.createEmbeddingText(quote, savedQuote);
+
+        await this.saveEmbedding(
+          basicEmbeddingText,
+          quote.symbol as string,
+          quoteDate,
+          'Financial Modeling Prep API',
+          0.8,
+        );
+      }
+    }
+
+    this.logger.log(`Processed batch of ${quotes.length} stock quotes.`);
+  }
+
+  /**
+   * Process Yahoo Finance data and create a stock quote with enriched data
+   */
+  private async processYahooData(
+    quote: Record<string, unknown>,
+    stock: Stock,
+    quoteDate: Date,
+    yahooData: Record<string, unknown>,
+  ): Promise<[StockQuote, string]> {
+    let statisticData = null;
+    let companyData = null;
+
+    // Create stock quote first
+    const newQuote = this.createBasicQuote(quote, stock, quoteDate);
+
+    // Save quote to get an ID
+    const savedQuote = await this.stockQuoteRepository.save(newQuote);
+
+    if (yahooData.defaultKeyStatistics) {
+      try {
+        statisticData =
+          await this.stockStatisticService.createStatisticFromYahooData(
+            stock.id,
+            stock,
+            quoteDate,
+            yahooData.defaultKeyStatistics as Record<string, unknown>,
+            savedQuote, // Pass the saved quote
+          );
+        this.logger.log(
+          `Statistics for ${quote.symbol} stored successfully via service`,
+        );
+      } catch (error) {
+        this.logger.warn(
+          `Failed to store statistics for ${quote.symbol}: ${error.message}`,
+        );
+      }
+    }
+
+    if (yahooData.assetProfile) {
+      try {
+        companyData = await this.companiesService.updateCompanyProfile(
+          quote.symbol as string,
+          yahooData.assetProfile as Record<string, unknown>,
+        );
+        this.logger.log(
+          `Company profile for ${quote.symbol} updated successfully with Yahoo data`,
+        );
       } catch (error) {
         this.logger.warn(
           `Failed to update company profile for ${quote.symbol}: ${error.message}`,
         );
       }
-
-      const newQuote = new StockQuote();
-      newQuote.date = quoteDate;
-      newQuote.open = quote.open;
-      newQuote.dayHigh = quote.dayHigh;
-      newQuote.dayLow = quote.dayLow;
-      newQuote.price = quote.price;
-      newQuote.adjClose = quote.adjClose;
-      newQuote.volume = quote.volume;
-      newQuote.avgVolume = quote.avgVolume;
-      newQuote.change = quote.change;
-      newQuote.changesPercentage = quote.changesPercentage;
-      newQuote.yearHigh = quote.yearHigh;
-      newQuote.yearLow = quote.yearLow;
-      newQuote.priceAvg50 = quote.priceAvg50;
-      newQuote.priceAvg200 = quote.priceAvg200;
-      newQuote.eps = quote.eps;
-      newQuote.pe = quote.pe;
-      newQuote.marketCap = quote.marketCap;
-      newQuote.previousClose = quote.previousClose;
-      newQuote.earningsAnnouncement =
-        quote.earningsAnnouncement &&
-        !isNaN(new Date(quote.earningsAnnouncement).getTime())
-          ? new Date(quote.earningsAnnouncement)
-          : null;
-      newQuote.sharesOutstanding = quote.sharesOutstanding;
-      newQuote.timestamp = quoteDate;
-      newQuote.stock = stock;
-
-      const embeddingText = [
-        `Symbol: ${quote.symbol || 'N/A'}`,
-        `Date: ${quoteDate.toISOString().split('T')[0]}`,
-        `Price: ${quote.price ?? 'N/A'}`,
-        `Open: ${quote.open ?? 'N/A'}`,
-        `DayHigh: ${quote.dayHigh ?? 'N/A'}`,
-        `DayLow: ${quote.dayLow ?? 'N/A'}`,
-        `AdjClose: ${quote.adjClose ?? 'N/A'}`,
-        `Volume: ${quote.volume ?? 'N/A'}`,
-        `AvgVolume: ${quote.avgVolume ?? 'N/A'}`,
-        `Change: ${quote.change ?? 'N/A'}`,
-        `ChangesPercentage: ${quote.changesPercentage ?? 'N/A'}`,
-        `YearHigh: ${quote.yearHigh ?? 'N/A'}`,
-        `YearLow: ${quote.yearLow ?? 'N/A'}`,
-        `PriceAvg50: ${quote.priceAvg50 ?? 'N/A'}`,
-        `PriceAvg200: ${quote.priceAvg200 ?? 'N/A'}`,
-        `EPS: ${quote.eps ?? 'N/A'}`,
-        `PE: ${quote.pe ?? 'N/A'}`,
-        `MarketCap: ${quote.marketCap ?? 'N/A'}`,
-        `PreviousClose: ${quote.previousClose ?? 'N/A'}`,
-        `EarningsAnnouncement: ${newQuote.earningsAnnouncement?.toISOString() ?? 'N/A'}`,
-        `SharesOutstanding: ${quote.sharesOutstanding ?? 'N/A'}`,
-      ].join(', ');
-
-      await this.embeddingsService.embedAndSaveDocument({
-        text: embeddingText,
-        ticker: quote.symbol,
-        category: 'stock_quote',
-        contentDate: quoteDate,
-        source: 'Financial Modeling Prep API',
-        reliabilityScore: 0.9,
-        date: quoteDate,
-        type: 'stock',
-      });
-
-      quotesToSave.push(newQuote);
     }
 
-    if (quotesToSave.length > 0) {
-      await this.stockQuoteRepository.save(quotesToSave);
-    }
+    const richEmbeddingText = this.createEmbeddingText(
+      quote,
+      savedQuote,
+      statisticData,
+      companyData,
+    );
 
-    this.logger.log(`Processed batch of ${quotes.length} stock quotes.`);
+    return [savedQuote, richEmbeddingText];
+  }
+
+  /**
+   * Create embedding text for stock data with optional statistical and company data
+   * @param quote The quote data
+   * @param newQuote The new quote entity
+   * @param statisticData Optional statistical data
+   * @param companyData Optional company data
+   * @returns Formatted embedding text
+   */
+  private createEmbeddingText(
+    quote: Record<string, unknown>,
+    newQuote: StockQuote,
+    statisticData?: StockStatistic,
+    companyData?: Partial<Company>,
+  ): string {
+    const baseEmbeddingText = [
+      `Symbol: ${(quote.symbol as string) || 'N/A'}`,
+      `Date: ${newQuote.date.toISOString().split('T')[0]}`,
+      `Price: ${quote.price ?? 'N/A'}`,
+      `Open: ${quote.open ?? 'N/A'}`,
+      `DayHigh: ${quote.dayHigh ?? 'N/A'}`,
+      `DayLow: ${quote.dayLow ?? 'N/A'}`,
+      `AdjClose: ${quote.adjClose ?? 'N/A'}`,
+      `Volume: ${quote.volume ?? 'N/A'}`,
+      `AvgVolume: ${quote.avgVolume ?? 'N/A'}`,
+      `Change: ${quote.change ?? 'N/A'}`,
+      `ChangesPercentage: ${quote.changesPercentage ?? 'N/A'}`,
+      `YearHigh: ${quote.yearHigh ?? 'N/A'}`,
+      `YearLow: ${quote.yearLow ?? 'N/A'}`,
+      `PriceAvg50: ${quote.priceAvg50 ?? 'N/A'}`,
+      `PriceAvg200: ${quote.priceAvg200 ?? 'N/A'}`,
+      `EPS: ${quote.eps ?? 'N/A'}`,
+      `PE: ${quote.pe ?? 'N/A'}`,
+      `MarketCap: ${quote.marketCap ?? 'N/A'}`,
+      `PreviousClose: ${quote.previousClose ?? 'N/A'}`,
+      `EarningsAnnouncement: ${newQuote.earningsAnnouncement?.toISOString() ?? 'N/A'}`,
+      `SharesOutstanding: ${quote.sharesOutstanding ?? 'N/A'}`,
+    ];
+
+    const statisticalEmbeddingText = statisticData
+      ? [
+          `EnterpriseValue: ${statisticData.enterpriseValue ?? 'N/A'}`,
+          `ForwardPE: ${statisticData.forwardPE ?? 'N/A'}`,
+          `PriceToBook: ${statisticData.priceToBook ?? 'N/A'}`,
+          `EnterpriseToRevenue: ${statisticData.enterpriseToRevenue ?? 'N/A'}`,
+          `EnterpriseToEbitda: ${statisticData.enterpriseToEbitda ?? 'N/A'}`,
+          `ProfitMargins: ${statisticData.profitMargins ?? 'N/A'}`,
+          `TrailingEPS: ${statisticData.trailingEps ?? 'N/A'}`,
+          `FloatShares: ${statisticData.floatShares ?? 'N/A'}`,
+          `HeldPercentInsiders: ${statisticData.heldPercentInsiders ?? 'N/A'}`,
+          `HeldPercentInstitutions: ${statisticData.heldPercentInstitutions ?? 'N/A'}`,
+          `SharesShort: ${statisticData.sharesShort ?? 'N/A'}`,
+          `ShortRatio: ${statisticData.shortRatio ?? 'N/A'}`,
+          `ShortPercentOfFloat: ${statisticData.shortPercentOfFloat ?? 'N/A'}`,
+          `PEGRatio: ${statisticData.pegRatio ?? 'N/A'}`,
+          `52WeekChange: ${statisticData.weekChange52 ?? 'N/A'}`,
+          `S&P52WeekChange: ${statisticData.spWeekChange52 ?? 'N/A'}`,
+          `LastFiscalYearEnd: ${statisticData.lastFiscalYearEnd?.toISOString().split('T')[0] ?? 'N/A'}`,
+          `MostRecentQuarter: ${statisticData.mostRecentQuarter?.toISOString().split('T')[0] ?? 'N/A'}`,
+        ]
+      : [];
+
+    const companyEmbeddingText = companyData
+      ? [
+          `CompanyName: ${companyData.name ?? 'N/A'}`,
+          `Industry: ${companyData.industry ?? 'N/A'}`,
+          `Sector: ${companyData.sector ?? 'N/A'}`,
+          `CEO: ${companyData.ceo ?? 'N/A'}`,
+          `Country: ${companyData.country ?? 'N/A'}`,
+          `FullTimeEmployees: ${companyData.fullTimeEmployees ?? 'N/A'}`,
+        ]
+      : [];
+
+    return [
+      ...baseEmbeddingText,
+      ...statisticalEmbeddingText,
+      ...companyEmbeddingText,
+    ].join(', ');
+  }
+
+  /**
+   * Save embedding document with given parameters
+   */
+  private async saveEmbedding(
+    embeddingText: string,
+    symbol: string,
+    contentDate: Date,
+    source: string,
+    reliabilityScore: number,
+  ): Promise<void> {
+    await this.embeddingsService.embedAndSaveDocument({
+      text: embeddingText,
+      ticker: symbol,
+      category: 'stock_quote',
+      contentDate,
+      source,
+      reliabilityScore,
+      date: contentDate,
+      type: 'stock',
+    });
   }
 
   /**
@@ -728,7 +882,7 @@ export class StocksService {
   ): string {
     const dateStr = date.toISOString().split('T')[0];
 
-    let summaryText = `Top Gainers on ${dateStr}\n\n`;
+    let gainersSummaryText = `Top Gainers on ${dateStr}\n\n`;
 
     const validGainers = topGainers.filter(
       (quote) =>
@@ -740,9 +894,9 @@ export class StocksService {
     );
 
     validGainers.forEach((quote, index) => {
-      summaryText += `${index + 1}. ${quote.stock.ticker} (${quote.stock.name})\n`;
-      summaryText += `   Price: $${Number(quote.price).toFixed(2)} | Change: +$${Number(quote.change).toFixed(2)} (+${Number(quote.changesPercentage).toFixed(2)}%)\n`;
-      summaryText += `   Volume: ${(Number(quote.volume) / 1000000).toFixed(2)}M | Market Cap: $${(Number(quote.marketCap) / 1000000000).toFixed(2)}B\n\n`;
+      gainersSummaryText += `${index + 1}. ${quote.stock.ticker} (${quote.stock.name})\n`;
+      gainersSummaryText += `   Price: $${typeof quote.price === 'number' ? quote.price.toFixed(2) : Number(quote.price).toFixed(2) || 'N/A'} | Change: +$${typeof quote.change === 'number' ? quote.change.toFixed(2) : Number(quote.change).toFixed(2) || 'N/A'} (+${typeof quote.changesPercentage === 'number' ? quote.changesPercentage.toFixed(2) : Number(quote.changesPercentage).toFixed(2) || 'N/A'}%)\n`;
+      gainersSummaryText += `   Volume: ${quote.volume ? (Number(quote.volume) / 1000000).toFixed(2) + 'M' : 'N/A'} | Market Cap: $${quote.marketCap ? (Number(quote.marketCap) / 1000000000).toFixed(2) + 'B' : 'N/A'}\n\n`;
     });
 
     const avgGain =
@@ -754,14 +908,14 @@ export class StocksService {
         : 0;
 
     if (validGainers.length > 0) {
-      summaryText += `\nSummary: The top ${validGainers.length} gainers on ${dateStr} had an average gain of ${avgGain.toFixed(2)}%. `;
-      summaryText += `${validGainers[0].stock.ticker} led with a gain of ${Number(validGainers[0].changesPercentage).toFixed(2)}%, `;
-      summaryText += `while ${validGainers[validGainers.length - 1].stock.ticker} rounded out the list with a gain of ${Number(validGainers[validGainers.length - 1].changesPercentage).toFixed(2)}%.`;
+      gainersSummaryText += `\nSummary: The top ${validGainers.length} gainers on ${dateStr} had an average gain of ${avgGain.toFixed(2)}%. `;
+      gainersSummaryText += `${validGainers[0].stock.ticker} led with a gain of ${Number(validGainers[0].changesPercentage).toFixed(2)}%, `;
+      gainersSummaryText += `while ${validGainers[validGainers.length - 1].stock.ticker} rounded out the list with a gain of ${Number(validGainers[validGainers.length - 1].changesPercentage).toFixed(2)}%.`;
     } else {
-      summaryText += `\nNo valid gainer data available for ${dateStr}.`;
+      gainersSummaryText += `\nNo valid gainer data available for ${dateStr}.`;
     }
 
-    return summaryText;
+    return gainersSummaryText;
   }
 
   /**
@@ -776,7 +930,7 @@ export class StocksService {
   ): string {
     const dateStr = date.toISOString().split('T')[0];
 
-    let summaryText = `Top Losers on ${dateStr}\n\n`;
+    let losersSummaryText = `Top Losers on ${dateStr}\n\n`;
 
     const validLosers = topLosers.filter(
       (quote) =>
@@ -788,9 +942,9 @@ export class StocksService {
     );
 
     validLosers.forEach((quote, index) => {
-      summaryText += `${index + 1}. ${quote.stock.ticker} (${quote.stock.name})\n`;
-      summaryText += `   Price: $${Number(quote.price).toFixed(2)} | Change: -$${Math.abs(Number(quote.change)).toFixed(2)} (${Number(quote.changesPercentage).toFixed(2)}%)\n`;
-      summaryText += `   Volume: ${(Number(quote.volume) / 1000000).toFixed(2)}M | Market Cap: $${(Number(quote.marketCap) / 1000000000).toFixed(2)}B\n\n`;
+      losersSummaryText += `${index + 1}. ${quote.stock.ticker} (${quote.stock.name})\n`;
+      losersSummaryText += `   Price: $${typeof quote.price === 'number' ? quote.price.toFixed(2) : Number(quote.price).toFixed(2) || 'N/A'} | Change: -$${typeof quote.change === 'number' ? Math.abs(quote.change).toFixed(2) : Math.abs(Number(quote.change)).toFixed(2) || 'N/A'} (${typeof quote.changesPercentage === 'number' ? quote.changesPercentage.toFixed(2) : Number(quote.changesPercentage).toFixed(2) || 'N/A'}%)\n`;
+      losersSummaryText += `   Volume: ${quote.volume ? (Number(quote.volume) / 1000000).toFixed(2) + 'M' : 'N/A'} | Market Cap: $${quote.marketCap ? (Number(quote.marketCap) / 1000000000).toFixed(2) + 'B' : 'N/A'}\n\n`;
     });
 
     const avgLoss =
@@ -802,14 +956,14 @@ export class StocksService {
         : 0;
 
     if (validLosers.length > 0) {
-      summaryText += `\nSummary: The top ${validLosers.length} losers on ${dateStr} had an average loss of ${Math.abs(avgLoss).toFixed(2)}%. `;
-      summaryText += `${validLosers[0].stock.ticker} led with a loss of ${Number(validLosers[0].changesPercentage).toFixed(2)}%, `;
-      summaryText += `while ${validLosers[validLosers.length - 1].stock.ticker} rounded out the list with a loss of ${Number(validLosers[validLosers.length - 1].changesPercentage).toFixed(2)}%.`;
+      losersSummaryText += `\nSummary: The top ${validLosers.length} losers on ${dateStr} had an average loss of ${Math.abs(avgLoss).toFixed(2)}%. `;
+      losersSummaryText += `${validLosers[0].stock.ticker} led with a loss of ${Number(validLosers[0].changesPercentage).toFixed(2)}%, `;
+      losersSummaryText += `while ${validLosers[validLosers.length - 1].stock.ticker} rounded out the list with a loss of ${Number(validLosers[validLosers.length - 1].changesPercentage).toFixed(2)}%.`;
     } else {
-      summaryText += `\nNo valid loser data available for ${dateStr}.`;
+      losersSummaryText += `\nNo valid loser data available for ${dateStr}.`;
     }
 
-    return summaryText;
+    return losersSummaryText;
   }
 
   /**
@@ -923,22 +1077,6 @@ export class StocksService {
     };
 
     return response;
-  }
-
-  private calculateMarketSentiment(
-    advancingCount: number,
-    decliningCount: number,
-  ): MarketBreadthDto['sentiment'] {
-    if (advancingCount > decliningCount * 1.5) return 'very positive';
-    if (advancingCount > decliningCount) return 'positive';
-    if (decliningCount > advancingCount * 1.5) return 'very negative';
-    if (decliningCount > advancingCount) return 'negative';
-    return 'neutral';
-  }
-
-  private calculatePercentChange(current: number, previous: number): number {
-    if (!previous) return 0;
-    return ((current - previous) / previous) * 100;
   }
 
   private async getNasdaqComposite(): Promise<CompositeData> {
@@ -1153,5 +1291,686 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
           }),
       ),
     };
+  }
+
+  /**
+   * Create a basic stock quote from quote data
+   */
+  private createBasicQuote(
+    quote: Record<string, unknown>,
+    stock: Stock,
+    quoteDate: Date,
+  ): StockQuote {
+    const newQuote = new StockQuote();
+    newQuote.date = quoteDate;
+    newQuote.open = quote.open as number;
+    newQuote.dayHigh = quote.dayHigh as number;
+    newQuote.dayLow = quote.dayLow as number;
+    newQuote.price = quote.price as number;
+    newQuote.adjClose = quote.adjClose as number;
+    newQuote.volume = quote.volume as number;
+    newQuote.avgVolume = quote.avgVolume as number;
+    newQuote.change = quote.change as number;
+    newQuote.changesPercentage = quote.changesPercentage as number;
+    newQuote.yearHigh = quote.yearHigh as number;
+    newQuote.yearLow = quote.yearLow as number;
+    newQuote.priceAvg50 = quote.priceAvg50 as number;
+    newQuote.priceAvg200 = quote.priceAvg200 as number;
+    newQuote.eps = quote.eps as number;
+    newQuote.pe = quote.pe as number;
+    newQuote.marketCap = quote.marketCap as number;
+    newQuote.previousClose = quote.previousClose as number;
+    newQuote.earningsAnnouncement =
+      quote.earningsAnnouncement &&
+      !isNaN(new Date(quote.earningsAnnouncement as string).getTime())
+        ? new Date(quote.earningsAnnouncement as string)
+        : null;
+    newQuote.sharesOutstanding = quote.sharesOutstanding as number;
+    newQuote.timestamp = quoteDate;
+    newQuote.stock = stock;
+
+    return newQuote;
+  }
+
+  /**
+   * Generate stock analysis based on stock data
+   * @param stock Stock entity with quotes and statistics
+   * @returns Object with structured JSON and Markdown formatted analysis
+   */
+  async generateStockAnalysis(stock: Stock): Promise<{
+    analysisStructured: {
+      ticker: string;
+      analysis: {
+        companyProfile: string;
+        valuation: string;
+        performance: string;
+        ownership: string;
+        shortInterest: string;
+        strengthsAndRisks: string;
+        summary: string;
+        sentiment:
+          | 'very_bearish'
+          | 'bearish'
+          | 'neutral'
+          | 'bullish'
+          | 'very_bullish';
+      };
+    };
+  }> {
+    try {
+      if (!stock || !stock.quotes || stock.quotes.length === 0) {
+        return {
+          analysisStructured: {
+            ticker: stock?.ticker || 'Unknown',
+            analysis: {
+              companyProfile: `${stock?.name || 'Unknown'} (${stock?.ticker || 'Unknown'})`,
+              valuation: 'Insufficient data',
+              performance: 'Insufficient data',
+              ownership: 'Insufficient data',
+              shortInterest: 'Insufficient data',
+              strengthsAndRisks: 'Insufficient data available',
+              summary: 'Insufficient data available to generate analysis.',
+              sentiment: 'neutral',
+            },
+          },
+        };
+      }
+
+      const latestQuote = stock.quotes[0];
+      const statistic =
+        stock.statistics && stock.statistics.length > 0
+          ? stock.statistics[0]
+          : null;
+
+      // Format the prompt with stock data
+      const prompt = this.formatStockAnalysisPrompt(
+        stock,
+        latestQuote,
+        statistic,
+        true,
+      );
+
+      // Use existing AI market analysis service which should already have OpenAI integration
+      const analysis =
+        await this.aiMarketAnalysisService.generateCustomAnalysis(prompt);
+
+      // Parse the response to extract JSON and markdown portions
+      const structuredResponse = this.extractStructuredData(
+        analysis,
+        stock,
+        latestQuote,
+        statistic,
+      );
+
+      return {
+        analysisStructured: structuredResponse,
+      };
+    } catch (error) {
+      this.logger.error(`Error generating stock analysis: ${error.message}`);
+      return {
+        analysisStructured: {
+          ticker: stock?.ticker || 'Unknown',
+          analysis: {
+            companyProfile: `${stock?.name || 'Unknown'} (${stock?.ticker || 'Unknown'})`,
+            valuation: 'Error generating analysis',
+            performance: 'Error generating analysis',
+            ownership: 'Error generating analysis',
+            shortInterest: 'Error generating analysis',
+            strengthsAndRisks: 'Error generating analysis',
+            summary: 'An error occurred while generating the analysis.',
+            sentiment: 'neutral',
+          },
+        },
+      };
+    }
+  }
+
+  /**
+   * Extract structured data from the response
+   */
+  private extractStructuredData(
+    response: string,
+    stock: Stock,
+    quote: StockQuote,
+    statistic: StockStatistic | null,
+  ): {
+    ticker: string;
+    analysis: {
+      companyProfile: string;
+      valuation: string;
+      performance: string;
+      ownership: string;
+      shortInterest: string;
+      strengthsAndRisks: string;
+      summary: string;
+      sentiment:
+        | 'very_bearish'
+        | 'bearish'
+        | 'neutral'
+        | 'bullish'
+        | 'very_bullish';
+    };
+  } {
+    try {
+      // Try to extract a JSON block if it exists
+      const jsonMatch = response.match(/```json\n([\s\S]*?)\n```/);
+
+      if (jsonMatch && jsonMatch[1]) {
+        try {
+          const jsonData = JSON.parse(jsonMatch[1]);
+          // Check if the JSON has the expected structure
+          if (jsonData.ticker && jsonData.analysis) {
+            return jsonData;
+          }
+        } catch (jsonError) {
+          this.logger.warn(`Failed to parse JSON: ${jsonError.message}`);
+        }
+      }
+
+      // If no valid JSON found or it doesn't have the expected structure,
+      // create a structured response from the markdown content
+      return {
+        ticker: stock.ticker,
+        analysis: {
+          companyProfile: this.extractSectionFromMarkdown(response, [
+            'company profile',
+            'company',
+            'profile',
+            'overview',
+          ]),
+          valuation: this.extractSectionFromMarkdown(response, [
+            'valuation',
+            'financials',
+            'ratios',
+          ]),
+          performance: this.extractSectionFromMarkdown(response, [
+            'performance',
+            'price',
+            'trend',
+          ]),
+          ownership: this.extractSectionFromMarkdown(response, [
+            'ownership',
+            'insider',
+            'institutional',
+          ]),
+          shortInterest: this.extractSectionFromMarkdown(response, [
+            'short interest',
+            'short',
+            'interest',
+          ]),
+          strengthsAndRisks:
+            this.extractStrengthsAndRisksFromMarkdown(response),
+          summary:
+            this.extractSectionFromMarkdown(response, [
+              'summary',
+              'conclusion',
+              'overall',
+            ]) || this.createSummaryFromText(response),
+          sentiment: this.determineSentimentFromText(response),
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Error extracting structured data: ${error.message}`);
+      return {
+        ticker: stock.ticker,
+        analysis: {
+          companyProfile: `${stock.name} (${stock.ticker}) is a ${stock.company?.industry || 'company'} in the ${stock.company?.sector || 'market'}.`,
+          valuation: `Current price: $${quote.price || 'N/A'}. Market cap: $${quote.marketCap ? (Number(quote.marketCap) / 1000000).toFixed(2) + 'M' : 'N/A'}.`,
+          performance: `${stock.ticker} has changed by ${quote.changesPercentage ? Number(quote.changesPercentage).toFixed(2) + '%' : 'N/A'} recently.`,
+          ownership: 'Ownership data extraction failed.',
+          shortInterest: 'Short interest data extraction failed.',
+          strengthsAndRisks: 'Unable to analyze strengths and risks.',
+          summary: 'Error occurred while parsing the analysis.',
+          sentiment: 'neutral',
+        },
+      };
+    }
+  }
+
+  /**
+   * Format the prompt for stock analysis
+   */
+  private formatStockAnalysisPrompt(
+    stock: Stock,
+    quote: StockQuote,
+    statistic: StockStatistic | null,
+    structuredOutput: boolean = false,
+  ): string {
+    // Build company info section
+    const companyInfo = `Company Info:
+- Name: ${stock.name}
+- Exchange: ${stock.exchange || 'NASDAQ'}
+- Ticker: ${stock.ticker}${
+      stock.company
+        ? `
+- Industry: ${stock.company.industry || 'N/A'}
+- Sector: ${stock.company.sector || 'N/A'}
+- Website: ${stock.company.website || 'N/A'}
+- CEO: ${stock.company.ceo || 'N/A'}
+- Description: ${stock.company.description || 'N/A'}
+- Headquarters: ${stock.company.city ? `${stock.company.city}, ${stock.company.state || ''}` : 'N/A'}
+- Employees: ${stock.company.fullTimeEmployees || 'N/A'}`
+        : ''
+    }`;
+
+    // Build quote section
+    const quoteInfo = `Quote (as of ${quote.date || new Date(quote.timestamp).toISOString().split('T')[0]}):
+- Price: $${Number(quote.price).toFixed(2)} (${quote.changesPercentage >= 0 ? '↑' : '↓'} ${Number(quote.changesPercentage).toFixed(2)}%)
+- Market Cap: $${quote.marketCap ? (Number(quote.marketCap) / 1000000).toFixed(2) + 'M' : 'N/A'}
+- 52-Week High/Low: $${quote.yearHigh ? Number(quote.yearHigh).toFixed(2) : 'N/A'} / $${quote.yearLow ? Number(quote.yearLow).toFixed(2) : 'N/A'}
+- Volume: ${quote.volume ? Number(quote.volume).toLocaleString() : 'N/A'} (Avg: ${quote.avgVolume ? Number(quote.avgVolume).toLocaleString() : 'N/A'})
+- EPS: $${quote.eps ? Number(quote.eps).toFixed(2) : 'N/A'}
+- PE Ratio: ${quote.pe ? Number(quote.pe).toFixed(2) : 'N/A'}
+- Previous Close: $${quote.previousClose ? Number(quote.previousClose).toFixed(2) : 'N/A'}
+- PriceAvg50: ${quote.priceAvg50 ? Number(quote.priceAvg50).toFixed(2) : 'N/A'}
+- PriceAvg200: ${quote.priceAvg200 ? Number(quote.priceAvg200).toFixed(2) : 'N/A'}`;
+
+    // Build statistics section if available
+    let statisticsInfo = '';
+    if (statistic) {
+      // Safely handle dates in statistics
+      let lastFiscalYearEndStr = 'N/A';
+      let mostRecentQuarterStr = 'N/A';
+
+      try {
+        if (statistic.lastFiscalYearEnd) {
+          const lastFiscalDate =
+            statistic.lastFiscalYearEnd instanceof Date
+              ? statistic.lastFiscalYearEnd
+              : new Date(statistic.lastFiscalYearEnd);
+          lastFiscalYearEndStr = lastFiscalDate.toISOString().split('T')[0];
+        }
+      } catch (e) {
+        this.logger.warn(`Error formatting lastFiscalYearEnd: ${e.message}`);
+      }
+
+      try {
+        if (statistic.mostRecentQuarter) {
+          const quarterDate =
+            statistic.mostRecentQuarter instanceof Date
+              ? statistic.mostRecentQuarter
+              : new Date(statistic.mostRecentQuarter);
+          mostRecentQuarterStr = quarterDate.toISOString().split('T')[0];
+        }
+      } catch (e) {
+        this.logger.warn(`Error formatting mostRecentQuarter: ${e.message}`);
+      }
+
+      statisticsInfo = `
+Key Statistics:
+Enterprise Value: $${statistic.enterpriseValue ? (Number(statistic.enterpriseValue) / 1000000).toFixed(2) + 'M' : 'N/A'}
+Float Shares: ${statistic.floatShares ? (Number(statistic.floatShares) / 1000000).toFixed(2) + 'M' : 'N/A'}
+Shares Outstanding: ${statistic.sharesOutstanding ? (Number(statistic.sharesOutstanding) / 1000000).toFixed(2) + 'M' : 'N/A'}
+Insider Ownership: ${statistic.heldPercentInsiders ? (Number(statistic.heldPercentInsiders) * 100).toFixed(2) + '%' : 'N/A'}
+Institutional Ownership: ${statistic.heldPercentInstitutions ? (Number(statistic.heldPercentInstitutions) * 100).toFixed(2) + '%' : 'N/A'}
+Short Interest: ${statistic.sharesShort ? Number(statistic.sharesShort).toLocaleString() : 'N/A'} (${statistic.shortPercentOfFloat ? (Number(statistic.shortPercentOfFloat) * 100).toFixed(2) + '% of float' : 'N/A'})
+Short Ratio: ${statistic.shortRatio ? Number(statistic.shortRatio).toFixed(2) : 'N/A'}
+Price/Book: ${statistic.priceToBook ? Number(statistic.priceToBook).toFixed(2) : 'N/A'}
+Enterprise to Revenue: ${statistic.enterpriseToRevenue ? Number(statistic.enterpriseToRevenue).toFixed(2) : 'N/A'}
+Enterprise to EBITDA: ${statistic.enterpriseToEbitda ? Number(statistic.enterpriseToEbitda).toFixed(2) : 'N/A'}
+Profit Margin: ${statistic.profitMargins ? (Number(statistic.profitMargins) * 100).toFixed(2) + '%' : 'N/A'}
+52-Week Return: ${statistic.weekChange52 ? (Number(statistic.weekChange52) * 100).toFixed(2) + '%' : 'N/A'}
+S&P 52-Week Return: ${statistic.spWeekChange52 ? (Number(statistic.spWeekChange52) * 100).toFixed(2) + '%' : 'N/A'}
+
+Fiscal Dates:
+Last Fiscal Year End: ${lastFiscalYearEndStr}
+Most Recent Quarter: ${mostRecentQuarterStr}`;
+    }
+
+    let prompt = `You are a professional financial analyst.
+
+Generate a concise analysis report of the stock **${stock.name} (${stock.ticker})** using the data provided below. Highlight:
+- Company profile (industry, sector, business model)
+- Valuation and key ratios
+- Recent performance (price, volume, volatility)
+- Insider/institutional ownership insights
+- Short interest overview
+- Strengths and risks
+- Overall sentiment
+
+Only use the data provided. Be objective and use financial terminology.
+
+---
+${companyInfo}
+
+${quoteInfo}${statisticsInfo}
+
+---`;
+
+    if (structuredOutput) {
+      prompt += `
+Your response should include two parts:
+
+1. A comprehensive markdown-formatted analysis with the following clear structure:
+
+## Company Profile
+[Write a paragraph about the company, its industry, sector, and business model]
+
+## Valuation Analysis
+[Write a paragraph analyzing valuation metrics, PE ratio, price/book, etc.]
+
+## Recent Performance
+[Write a paragraph on recent price action, volume, trends, and volatility]
+
+## Ownership Structure
+[Write a paragraph about insider and institutional ownership]
+
+## Short Interest
+[Write a paragraph analyzing short interest data, if available]
+
+## Strengths
+- [Key strength point 1]
+- [Key strength point 2]
+- [Key strength point 3 if applicable]
+
+## Risks
+- [Key risk factor 1]
+- [Key risk factor 2]
+- [Key risk factor 3 if applicable]
+
+## Summary
+[Write a concise summary paragraph with overall sentiment]
+
+2. A simplified JSON object at the end of your response in the following format (enclosed in \`\`\`json ... \`\`\` code block):
+
+\`\`\`json
+{
+  "ticker": "${stock.ticker}",
+  "analysis": {
+    "companyProfile": "Summary of company profile section",
+    "valuation": "Summary of valuation section",
+    "performance": "Summary of performance section",
+    "ownership": "Summary of ownership section",
+    "shortInterest": "Summary of short interest section",
+    "strengthsAndRisks": "Combined summary of strengths and risks",
+    "summary": "Overall conclusion",
+    "sentiment": "bullish" | "bearish" | "neutral" | "very_bullish" | "very_bearish"
+  }
+}
+\`\`\`
+
+The JSON should contain concise text summaries of each section, better with numerical data.
+`;
+    } else {
+      prompt += `Respond with a detailed summary suitable for investors evaluating this stock.`;
+    }
+
+    return prompt;
+  }
+
+  /**
+   * Extract a section from markdown text based on headings
+   */
+  private extractSectionFromMarkdown(
+    text: string,
+    possibleHeadings: string[],
+  ): string {
+    const lines = text.split('\n');
+    let extractedContent = '';
+    let inSection = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      const lowerLine = line.toLowerCase();
+
+      // Check if line contains a heading indicator
+      const isHeading =
+        line.startsWith('#') ||
+        (i > 0 &&
+          (lines[i - 1].startsWith('===') || lines[i - 1].startsWith('---')));
+
+      // If it's a heading, check if it's one we're looking for
+      if (
+        isHeading &&
+        possibleHeadings.some((heading) =>
+          lowerLine.includes(heading.toLowerCase()),
+        )
+      ) {
+        inSection = true;
+        continue;
+      }
+
+      // If it's a heading but not one we're looking for, end the section
+      if (isHeading && inSection) {
+        break;
+      }
+
+      // Add content if we're in a relevant section
+      if (inSection && line.length > 0) {
+        // Skip markdown link syntax and bullet points
+        const cleanLine = line
+          .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+          .replace(/^[*-] /, '');
+        extractedContent += cleanLine + ' ';
+      }
+    }
+
+    return extractedContent.trim() || `No information available`;
+  }
+
+  /**
+   * Extract strengths and risks from markdown text
+   */
+  private extractStrengthsAndRisksFromMarkdown(text: string): string {
+    const strengths = this.extractInsightsFromText(text, 'strength');
+    const risks = this.extractInsightsFromText(text, 'risk');
+
+    let result = '';
+    if (strengths.length > 0) {
+      result += 'Strengths: ' + strengths.join('; ') + '. ';
+    }
+
+    if (risks.length > 0) {
+      result += 'Risks: ' + risks.join('; ') + '.';
+    }
+
+    return result.trim() || 'No specific strengths or risks identified.';
+  }
+
+  /**
+   * Create a brief summary from the text
+   */
+  private createSummaryFromText(text: string): string {
+    // First try to find a conclusion paragraph
+    const conclusionMatch = text.match(
+      /(?:conclusion|summary|overall).*?:(.*?)(?:$|\n\n)/i,
+    );
+    if (conclusionMatch && conclusionMatch[1]) {
+      return conclusionMatch[1].trim();
+    }
+
+    // Otherwise use the first couple sentences
+    const sentences = text.split(/[.!?]/).filter((s) => s.trim().length > 10);
+    if (sentences.length > 0) {
+      return sentences.slice(0, 2).join('.') + '.';
+    }
+
+    return 'No summary available.';
+  }
+
+  /**
+   * Extract insights (strengths/risks) from analysis text
+   */
+  private extractInsightsFromText(
+    text: string,
+    type: 'strength' | 'risk',
+  ): string[] {
+    const insights: string[] = [];
+
+    // Look for bullet points that might indicate strengths or risks
+    const lines = text.split('\n');
+    let inSection = false;
+
+    for (const line of lines) {
+      const lowerLine = line.toLowerCase();
+
+      // Check if we're entering a relevant section
+      if (
+        (type === 'strength' &&
+          (lowerLine.includes('strength') ||
+            lowerLine.includes('advantage') ||
+            lowerLine.includes('positive') ||
+            lowerLine.includes('bullish'))) ||
+        (type === 'risk' &&
+          (lowerLine.includes('risk') ||
+            lowerLine.includes('challenge') ||
+            lowerLine.includes('concern') ||
+            lowerLine.includes('weakness') ||
+            lowerLine.includes('bearish')))
+      ) {
+        inSection = true;
+        continue;
+      }
+
+      // Check if we're leaving a section (entering a new one)
+      if (
+        inSection &&
+        (line.includes('# ') ||
+          line.includes('## ') ||
+          (type === 'strength' && lowerLine.includes('risk')) ||
+          (type === 'risk' && lowerLine.includes('conclusion')))
+      ) {
+        inSection = false;
+      }
+
+      // Capture bullet points while in a relevant section
+      if (
+        inSection &&
+        (line.trim().startsWith('-') || line.trim().startsWith('*'))
+      ) {
+        const point = line.trim().substring(1).trim();
+        if (point.length > 5) {
+          // Ensure it's substantive
+          insights.push(point);
+        }
+      }
+    }
+
+    // If no structured points found, use heuristics to extract insights
+    if (insights.length === 0) {
+      const keywords =
+        type === 'strength'
+          ? [
+              'strong',
+              'positive',
+              'advantage',
+              'growth',
+              'increasing',
+              'improvement',
+            ]
+          : [
+              'risk',
+              'challenge',
+              'concern',
+              'weakness',
+              'decline',
+              'decreasing',
+              'negative',
+            ];
+
+      const sentences = text.split(/[.!?]/).filter((s) => s.trim().length > 10);
+
+      for (const sentence of sentences) {
+        const lowerSentence = sentence.toLowerCase();
+        if (keywords.some((keyword) => lowerSentence.includes(keyword))) {
+          insights.push(sentence.trim());
+          if (insights.length >= 3) break; // Limit to 3 if extracting this way
+        }
+      }
+    }
+
+    return insights.length > 0
+      ? insights
+      : [
+          type === 'strength'
+            ? 'No clear strengths identified'
+            : 'No clear risks identified',
+        ];
+  }
+
+  /**
+   * Determine sentiment from analysis text
+   */
+  private determineSentimentFromText(
+    text: string,
+  ): 'very_bearish' | 'bearish' | 'neutral' | 'bullish' | 'very_bullish' {
+    const lowerText = text.toLowerCase();
+
+    // Count sentiment indicators
+    const bearishTerms = [
+      'bearish',
+      'negative',
+      'concern',
+      'risk',
+      'overvalued',
+      'decline',
+      'weak',
+      'sell',
+      'avoid',
+    ];
+    const bullishTerms = [
+      'bullish',
+      'positive',
+      'strong',
+      'growth',
+      'undervalued',
+      'opportunity',
+      'buy',
+      'recommend',
+    ];
+    const veryBearishTerms = [
+      'significant risk',
+      'highly overvalued',
+      'strong sell',
+      'dangerous',
+      'severe decline',
+    ];
+    const veryBullishTerms = [
+      'strong buy',
+      'highly undervalued',
+      'exceptional growth',
+      'outstanding opportunity',
+    ];
+
+    let bearishCount = bearishTerms.reduce(
+      (count, term) =>
+        count + (lowerText.match(new RegExp(term, 'g')) || []).length,
+      0,
+    );
+
+    let bullishCount = bullishTerms.reduce(
+      (count, term) =>
+        count + (lowerText.match(new RegExp(term, 'g')) || []).length,
+      0,
+    );
+
+    const veryBearishCount = veryBearishTerms.reduce(
+      (count, term) =>
+        count + (lowerText.match(new RegExp(term, 'g')) || []).length,
+      0,
+    );
+
+    const veryBullishCount = veryBullishTerms.reduce(
+      (count, term) =>
+        count + (lowerText.match(new RegExp(term, 'g')) || []).length,
+      0,
+    );
+
+    // Add weighted counts for very bearish/bullish terms
+    bearishCount += veryBearishCount * 2;
+    bullishCount += veryBullishCount * 2;
+
+    // Determine sentiment based on counts
+    if (veryBearishCount >= 2 || bearishCount > bullishCount + 5) {
+      return 'very_bearish';
+    } else if (veryBullishCount >= 2 || bullishCount > bearishCount + 5) {
+      return 'very_bullish';
+    } else if (bearishCount > bullishCount + 2) {
+      return 'bearish';
+    } else if (bullishCount > bearishCount + 2) {
+      return 'bullish';
+    } else {
+      return 'neutral';
+    }
   }
 }

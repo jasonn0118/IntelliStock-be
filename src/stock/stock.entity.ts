@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { Company } from '../company/company.entity';
 import { StockQuote } from '../stockquote/stock-quote.entity';
+import { StockStatistic } from '../stockstatistic/stock-statistic.entity';
 import { Watchlist } from '../watchlist/watchlist.entity';
 
 @Entity()
@@ -31,6 +32,9 @@ export class Stock {
 
   @OneToMany(() => StockQuote, (quote) => quote.stock)
   quotes: StockQuote[];
+
+  @OneToMany(() => StockStatistic, (statistic) => statistic.stock)
+  statistics: StockStatistic[];
 
   @Column({ nullable: true })
   companyId: number;

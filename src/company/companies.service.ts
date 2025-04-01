@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Stock } from '../stock/stock.entity';
 import { Repository } from 'typeorm';
 import yahooFinance from 'yahoo-finance2';
+import { Stock } from '../stock/stock.entity';
 import { Company } from './company.entity';
 
 @Injectable()
@@ -42,104 +42,131 @@ export class CompaniesService {
   }
 
   private updateCompanyFields(company: Company, profile: any): Company {
-    if (profile.longName && company.name !== profile.longName) {
+    if (profile.name && company.name !== profile.name) {
+      company.name = profile.name;
+    } else if (profile.longName && company.name !== profile.longName) {
       company.name = profile.longName;
     }
+
     if (profile.sector && company.sector !== profile.sector) {
       company.sector = profile.sector;
     }
+
     if (profile.industry && company.industry !== profile.industry) {
       company.industry = profile.industry;
     }
+
     if (profile.website && company.website !== profile.website) {
       company.website = profile.website;
     }
-    if (
+
+    if (profile.description && company.description !== profile.description) {
+      company.description = profile.description;
+    } else if (
       profile.longBusinessSummary &&
       company.description !== profile.longBusinessSummary
     ) {
       company.description = profile.longBusinessSummary;
     }
-    if (
+
+    if (profile.ceo && company.ceo !== profile.ceo) {
+      company.ceo = profile.ceo;
+    } else if (
       profile.companyOfficers?.[0]?.name &&
       company.ceo !== profile.companyOfficers[0].name
     ) {
       company.ceo = profile.companyOfficers[0].name;
     }
+
     if (profile.country && company.country !== profile.country) {
       company.country = profile.country;
     }
+
     if (
       profile.fullTimeEmployees &&
-      company.fullTimeEmployees !== profile.fullTimeEmployees.toString()
+      company.fullTimeEmployees !== profile.fullTimeEmployees
     ) {
       company.fullTimeEmployees = profile.fullTimeEmployees.toString();
     }
+
     if (profile.phone && company.phone !== profile.phone) {
       company.phone = profile.phone;
     }
-    if (profile.address1 && company.address !== profile.address1) {
+
+    if (profile.address && company.address !== profile.address) {
+      company.address = profile.address;
+    } else if (profile.address1 && company.address !== profile.address1) {
       company.address = profile.address1;
     }
+
     if (profile.city && company.city !== profile.city) {
       company.city = profile.city;
     }
+
     if (profile.state && company.state !== profile.state) {
       company.state = profile.state;
     }
+
     if (profile.zip && company.zip !== profile.zip) {
       company.zip = profile.zip;
     }
+
     return company;
   }
 
-  async updateCompanyProfile(symbol: string): Promise<Company> {
+  /**
+   * Updates a company profile with provided data (to avoid duplicate API calls)
+   * @param symbol Stock ticker symbol
+   * @param companyData Pre-fetched company data
+   */
+  async updateCompanyProfile(
+    symbol: string,
+    companyData?: any,
+  ): Promise<Company> {
     try {
-      // Fetch company profile from API
-      const profile = await this.fetchCompanyProfile(symbol);
+      let profile: any;
 
-      // Skip if profile is empty or missing required data
-      if (!profile || !profile.longName) {
+      if (companyData) {
+        profile = companyData;
+      } else {
+        profile = await this.fetchCompanyProfile(symbol);
+      }
+
+      if (!profile || !profile.name) {
         this.logger.warn(`Skipping empty profile for ${symbol}`);
         return null;
       }
 
-      // Find existing company
       let company = await this.companyRepository.findOne({
         where: { ticker: symbol },
       });
 
       if (company) {
-        // Update existing company
         company = this.updateCompanyFields(company, profile);
         this.logger.log(`Updating existing company: ${symbol}`);
       } else {
-        // Create new company
         company = new Company();
         company.ticker = symbol;
-        company.name = profile.longName;
+        company.name = profile.name;
         company.sector = profile.sector;
         company.industry = profile.industry;
         company.website = profile.website;
-        company.description = profile.longBusinessSummary;
-        company.ceo = profile.companyOfficers?.[0]?.name;
+        company.description = profile.description;
+        company.ceo = profile.ceo;
         company.country = profile.country;
-        company.fullTimeEmployees = profile.fullTimeEmployees?.toString();
+        company.fullTimeEmployees = profile.fullTimeEmployees;
         company.phone = profile.phone;
-        company.address = profile.address1;
+        company.address = profile.address;
         company.city = profile.city;
         company.state = profile.state;
         company.zip = profile.zip;
         this.logger.log(`Creating new company: ${symbol}`);
       }
 
-      // Set logo URL
       company.logoUrl = this.getLogoUrl(symbol);
 
-      // Save the company
       const savedCompany = await this.companyRepository.save(company);
 
-      // Update the related stock record
       const stock = await this.stockRepository.findOne({
         where: { ticker: symbol },
       });
