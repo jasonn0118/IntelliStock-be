@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { StockQuote } from '../../stockquote/stock-quote.entity';
 import { StockStatistic } from '../../stockstatistic/stock-statistic.entity';
+import { StockAnalysisDto } from './stock.dto';
 
 export class StockDynamicDto {
   @ApiProperty({ type: () => [StockQuote] })
@@ -10,7 +11,7 @@ export class StockDynamicDto {
   statistics: StockStatistic[];
 
   @ApiProperty()
-  structuredAnalysis: any; // Use your analysis interface type here
+  structuredAnalysis: StockAnalysisDto;
 
   @ApiProperty()
   lastUpdated: Date;

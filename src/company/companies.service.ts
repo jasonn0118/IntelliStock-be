@@ -136,23 +136,19 @@ export class CompaniesService {
         profile = await this.fetchCompanyProfile(symbol);
       }
 
-      // Skip if profile is empty or missing required data
       if (!profile || !profile.name) {
         this.logger.warn(`Skipping empty profile for ${symbol}`);
         return null;
       }
 
-      // Find existing company
       let company = await this.companyRepository.findOne({
         where: { ticker: symbol },
       });
 
       if (company) {
-        // Update existing company
         company = this.updateCompanyFields(company, profile);
         this.logger.log(`Updating existing company: ${symbol}`);
       } else {
-        // Create new company
         company = new Company();
         company.ticker = symbol;
         company.name = profile.name;
@@ -171,13 +167,10 @@ export class CompaniesService {
         this.logger.log(`Creating new company: ${symbol}`);
       }
 
-      // Set logo URL
       company.logoUrl = this.getLogoUrl(symbol);
 
-      // Save the company
       const savedCompany = await this.companyRepository.save(company);
 
-      // Update the related stock record
       const stock = await this.stockRepository.findOne({
         where: { ticker: symbol },
       });

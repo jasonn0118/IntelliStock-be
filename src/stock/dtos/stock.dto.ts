@@ -92,7 +92,7 @@ export class StockDto {
     type: StockStatisticDto,
   })
   @Expose()
-  @Type(() => StockStatisticDto) // Using dynamic type to avoid circular dependency
+  @Type(() => StockStatisticDto)
   statistic: StockStatisticDto;
 
   @ApiProperty({
