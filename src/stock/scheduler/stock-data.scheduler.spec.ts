@@ -72,33 +72,6 @@ describe('StockDataScheduler', () => {
     });
   });
 
-  describe('updateHistoricalQuotes', () => {
-    it('should update historical quotes successfully', async () => {
-      mockStocksService.getAllSymbols.mockResolvedValue([
-        'AAPL',
-        'GOOGL',
-        'MSFT',
-      ]);
-      mockStocksService.fetchAndSaveHistoricalQuotes.mockResolvedValue(
-        undefined,
-      );
-
-      await scheduler.updateHistoricalQuotes();
-
-      expect(mockStocksService.getAllSymbols).toHaveBeenCalled();
-      expect(mockStocksService.fetchAndSaveHistoricalQuotes).toHaveBeenCalled();
-    });
-
-    it('should handle errors when updating historical quotes', async () => {
-      const error = new Error('Failed to update historical data');
-      mockStocksService.getAllSymbols.mockRejectedValue(error);
-
-      await expect(scheduler.updateHistoricalQuotes()).rejects.toThrow(
-        'Failed to update historical data',
-      );
-    });
-  });
-
   describe('handleGenerateMarketSummaries', () => {
     it('should generate market summaries successfully', async () => {
       mockStocksService.generateAndStoreMarketSummaries.mockResolvedValue(

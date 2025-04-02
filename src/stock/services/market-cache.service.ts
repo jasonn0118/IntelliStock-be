@@ -11,30 +11,15 @@ export class MarketCacheService {
     private readonly configService: ConfigService,
   ) {}
 
-  private getNextMidnight(): Date {
-    const now = new Date();
-    const est = new Date(
-      now.toLocaleString('en-US', { timeZone: 'America/New_York' }),
-    );
-    const tomorrow = new Date(est);
-    tomorrow.setDate(est.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
-    return tomorrow;
-  }
-
   async cacheMarketData(
     key: string,
     data: any,
     ttlSeconds?: number,
   ): Promise<void> {
     try {
-      const nextMidnight = this.getNextMidnight();
-      const ttl =
-        ttlSeconds || Math.floor((nextMidnight.getTime() - Date.now()) / 1000);
-
-      // Convert seconds to milliseconds for the CacheService
-      await this.cacheService.set(key, data, ttl * 1000);
-      this.logger.log(`Cached ${key} until ${nextMidnight.toISOString()}`);
+      const ttlMs = ttlSeconds || 24 * 60 * 60 * 1000;
+      await this.cacheService.set(key, data, ttlMs);
+      this.logger.log(`Cached ${key} for 24 hours`);
     } catch (error) {
       this.logger.error(`Failed to cache ${key}:`, error);
       throw error;
