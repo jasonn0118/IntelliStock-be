@@ -243,7 +243,6 @@ export class StocksController {
     description: 'Returns information about the current cache status',
   })
   async getCacheStatus() {
-    // Test the cache by setting and getting a value
     const testKey = 'cache-test';
     const testValue = {
       timestamp: new Date().toISOString(),
