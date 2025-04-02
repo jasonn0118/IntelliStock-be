@@ -32,32 +32,6 @@ export class StockDataScheduler {
     }
   }
 
-  @Cron(CronExpression.EVERY_DAY_AT_7PM, {
-    timeZone: 'America/New_York',
-  })
-  async updateHistoricalQuotes(): Promise<void> {
-    try {
-      const symbols = await this.stocksService.getAllSymbols();
-      const symbolsPerDay = 200;
-      const totalBatches = Math.ceil(symbols.length / symbolsPerDay);
-      const dayIndex = new Date().getDate() % totalBatches;
-      const start = dayIndex * symbolsPerDay;
-      const symbolsToUpdate = symbols.slice(start, start + symbolsPerDay);
-
-      const batchSize = 5;
-      for (let i = 0; i < symbolsToUpdate.length; i += batchSize) {
-        const batch = symbolsToUpdate.slice(i, i + batchSize);
-        await this.stocksService.fetchAndSaveHistoricalQuotes(batch);
-      }
-      this.logger.log(
-        `Historical data updated for ${symbolsToUpdate.length} symbols.`,
-      );
-    } catch (error) {
-      this.logger.error('Error updating historical data', error.stack);
-      throw error;
-    }
-  }
-
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
     timeZone: 'America/New_York',
   })

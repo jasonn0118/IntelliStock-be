@@ -1,4 +1,3 @@
-import { CacheKey, CacheTTL } from '@nestjs/cache-manager';
 import {
   ClassSerializerInterceptor,
   Controller,
@@ -13,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CacheKey, CacheTTL } from '../common/decorators/cache.decorators';
 import { Roles } from '../common/decorators/user-role.decorator';
 import { UserRole } from '../users/constants/user-contants';
 import { RoleGuard } from '../users/guards/role.guard';
@@ -20,7 +20,6 @@ import { MarketSummaryResponseDto } from './dtos/market-summary.dto';
 import { SearchStockDto } from './dtos/search-stock.dto';
 import { StockDynamicDto } from './dtos/stock-dynamic.dto';
 import { StockStaticDto } from './dtos/stock-static.dto';
-import { StockDto } from './dtos/stock.dto';
 import { TopStocksResponseDto } from './dtos/top-stock.dto';
 import { StockDataScheduler } from './scheduler/stock-data.scheduler';
 import { MarketCacheService } from './services/market-cache.service';
@@ -235,5 +234,36 @@ export class StocksController {
   async generateMarketSummaries() {
     await this.stockDataScheduler.handleGenerateMarketSummaries();
     return { message: 'Market summaries generation triggered successfully' };
+  }
+
+  @Get('cache-status')
+  @ApiOperation({ summary: 'Check cache status' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns information about the current cache status',
+  })
+  async getCacheStatus() {
+    // Test the cache by setting and getting a value
+    const testKey = 'cache-test';
+    const testValue = {
+      timestamp: new Date().toISOString(),
+      message: 'Cache test successful',
+    };
+
+    await this.marketCacheService.cacheMarketData(testKey, testValue);
+    const cachedValue =
+      await this.marketCacheService.getCachedMarketData(testKey);
+
+    // Get detailed cache statistics
+    const cacheStats = await this.marketCacheService.getCacheStats();
+
+    return {
+      status: 'success',
+      cacheWorking: !!cachedValue,
+      testValue,
+      cachedValue,
+      timestamp: new Date().toISOString(),
+      cacheStats,
+    };
   }
 }

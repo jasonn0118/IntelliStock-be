@@ -31,6 +31,9 @@
 
 - **Database Integration:**
   - Fully integrated with PostgreSQL via TypeORM.
+  - Redis-based distributed caching for improved performance.
+  - Configurable TTL with automatic cache invalidation.
+  - Fallback to in-memory cache when Redis is unavailable.
   - Configured environment variables for secure database connections.
   - Health check endpoints to monitor database connectivity.
 
@@ -73,6 +76,15 @@ src/
 ```
 
 ## 🔧 Recent Updates - March 25, 2025
+
+### Redis Caching Implementation
+- Replaced in-memory cache with Redis for distributed caching
+- Configured Redis connection with environment variables
+- Enhanced cache persistence across application restarts
+- Improved performance for high-traffic endpoints
+- Implemented TTL-based cache invalidation strategy
+- Added cache monitoring and debugging endpoints
+- [View Redis Documentation](docs/REDIS.md)
 
 ### Caching System Improvements
 - Implemented intelligent caching system with midnight EST refresh
@@ -127,6 +139,7 @@ src/
 - **Framework:** NestJS
 - **Language:** TypeScript
 - **Database:** PostgreSQL (with pgvector for vector embeddings)
+- **Caching:** Redis with fallback capabilities
 - **ORM:** TypeORM (using DataSource)
 - **Authentication:** JWT (JSON Web Tokens) with Passport.js
 - **OAuth:** Google OAuth 2.0 & Github with Passport.js
@@ -147,6 +160,7 @@ src/
 - **Node.js** (v20 or higher)
 - **npm** or **yarn**
 - **PostgreSQL** (with pgvector extension)
+- **Redis** (v7.0 or higher, for distributed caching)
 - **OpenAI API Key** (for LLM integration)
 
 ### Clone the Repository

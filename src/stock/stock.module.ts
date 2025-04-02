@@ -3,13 +3,13 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Stock } from './stock.entity';
 
 import { HttpModule } from '@nestjs/axios';
-import { CacheModule } from '@nestjs/cache-manager';
 import { ScheduleModule } from '@nestjs/schedule';
 import { Document } from 'src/document/document.entity';
 import { EmbeddingsService } from 'src/embedding/embeddings.service';
 import { StockQuote } from 'src/stockquote/stock-quote.entity';
 import { StockStatistic } from 'src/stockstatistic/stock-statistic.entity';
 import { StockStatisticService } from 'src/stockstatistic/stock-statistic.service';
+import { CacheModule } from '../cache/cache.module';
 import { CompanyModule } from '../company/company.module';
 import { StockDataScheduler } from './scheduler/stock-data.scheduler';
 import { AiMarketAnalysisService } from './services/ai-market-analysis.service';
@@ -23,10 +23,7 @@ import { StocksService } from './stocks.service';
     ScheduleModule.forRoot(),
     HttpModule,
     CompanyModule,
-    CacheModule.register({
-      ttl: 24 * 60 * 60, // 24 hours
-      max: 100,
-    }),
+    CacheModule,
   ],
   controllers: [StocksController],
   providers: [

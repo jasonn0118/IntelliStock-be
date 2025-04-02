@@ -1,27 +1,15 @@
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Cache } from 'cache-manager';
+import { CacheService } from '../../cache/cache.service';
 
 @Injectable()
 export class MarketCacheService {
   private readonly logger = new Logger(MarketCacheService.name);
 
   constructor(
-    @Inject(CACHE_MANAGER) private cacheManager: Cache,
-    private configService: ConfigService,
+    private readonly cacheService: CacheService,
+    private readonly configService: ConfigService,
   ) {}
-
-  private getNextMidnight(): Date {
-    const now = new Date();
-    const est = new Date(
-      now.toLocaleString('en-US', { timeZone: 'America/New_York' }),
-    );
-    const tomorrow = new Date(est);
-    tomorrow.setDate(est.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
-    return tomorrow;
-  }
 
   async cacheMarketData(
     key: string,
@@ -29,12 +17,9 @@ export class MarketCacheService {
     ttlSeconds?: number,
   ): Promise<void> {
     try {
-      const nextMidnight = this.getNextMidnight();
-      const ttl =
-        ttlSeconds || Math.floor((nextMidnight.getTime() - Date.now()) / 1000);
-
-      await this.cacheManager.set(key, data, ttl);
-      this.logger.log(`Cached ${key} until ${nextMidnight.toISOString()}`);
+      const ttlMs = ttlSeconds ? ttlSeconds * 1000 : 24 * 60 * 60 * 1000;
+      await this.cacheService.set(key, data, ttlMs);
+      this.logger.log(`Cached ${key} for ${ttlMs / 1000} seconds`);
     } catch (error) {
       this.logger.error(`Failed to cache ${key}:`, error);
       throw error;
@@ -43,7 +28,7 @@ export class MarketCacheService {
 
   async getCachedMarketData(key: string): Promise<any> {
     try {
-      return await this.cacheManager.get(key);
+      return await this.cacheService.get(key);
     } catch (error) {
       this.logger.error(`Failed to get cached ${key}:`, error);
       return null;
@@ -52,11 +37,43 @@ export class MarketCacheService {
 
   async invalidateCache(key: string): Promise<void> {
     try {
-      await this.cacheManager.del(key);
+      await this.cacheService.delete(key);
       this.logger.log(`Invalidated cache for ${key}`);
     } catch (error) {
       this.logger.error(`Failed to invalidate cache for ${key}:`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Get cache statistics
+   * @returns Object with cache statistics
+   */
+  async getCacheStats(): Promise<any> {
+    try {
+      const stats = await this.cacheService.getStats();
+      return {
+        ...stats,
+        marketKeys: stats.keys.filter(
+          (key) =>
+            key.startsWith('market-') ||
+            key.startsWith('stock-') ||
+            key.startsWith('top-'),
+        ),
+        cacheImplementation: this.configService.get('REDIS_URL')
+          ? 'Redis'
+          : 'In-Memory',
+        ttlConfiguration: {
+          default: this.configService.get('REDIS_TTL') || 24 * 60 * 60,
+          unit: 'seconds',
+        },
+      };
+    } catch (error) {
+      this.logger.error('Failed to get cache statistics:', error);
+      return {
+        status: 'error',
+        error: error.message,
+      };
     }
   }
 }
