@@ -243,6 +243,7 @@ export class StocksController {
     description: 'Returns information about the current cache status',
   })
   async getCacheStatus() {
+    // Test the cache by setting and getting a value
     const testKey = 'cache-test';
     const testValue = {
       timestamp: new Date().toISOString(),
@@ -253,12 +254,16 @@ export class StocksController {
     const cachedValue =
       await this.marketCacheService.getCachedMarketData(testKey);
 
+    // Get detailed cache statistics
+    const cacheStats = await this.marketCacheService.getCacheStats();
+
     return {
       status: 'success',
       cacheWorking: !!cachedValue,
       testValue,
       cachedValue,
       timestamp: new Date().toISOString(),
+      cacheStats,
     };
   }
 }

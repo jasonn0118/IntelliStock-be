@@ -17,9 +17,9 @@ export class MarketCacheService {
     ttlSeconds?: number,
   ): Promise<void> {
     try {
-      const ttlMs = ttlSeconds || 24 * 60 * 60 * 1000;
+      const ttlMs = ttlSeconds ? ttlSeconds * 1000 : 24 * 60 * 60 * 1000;
       await this.cacheService.set(key, data, ttlMs);
-      this.logger.log(`Cached ${key} for 24 hours`);
+      this.logger.log(`Cached ${key} for ${ttlMs / 1000} seconds`);
     } catch (error) {
       this.logger.error(`Failed to cache ${key}:`, error);
       throw error;
@@ -42,6 +42,38 @@ export class MarketCacheService {
     } catch (error) {
       this.logger.error(`Failed to invalidate cache for ${key}:`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Get cache statistics
+   * @returns Object with cache statistics
+   */
+  async getCacheStats(): Promise<any> {
+    try {
+      const stats = await this.cacheService.getStats();
+      return {
+        ...stats,
+        marketKeys: stats.keys.filter(
+          (key) =>
+            key.startsWith('market-') ||
+            key.startsWith('stock-') ||
+            key.startsWith('top-'),
+        ),
+        cacheImplementation: this.configService.get('REDIS_URL')
+          ? 'Redis'
+          : 'In-Memory',
+        ttlConfiguration: {
+          default: this.configService.get('REDIS_TTL') || 24 * 60 * 60,
+          unit: 'seconds',
+        },
+      };
+    } catch (error) {
+      this.logger.error('Failed to get cache statistics:', error);
+      return {
+        status: 'error',
+        error: error.message,
+      };
     }
   }
 }

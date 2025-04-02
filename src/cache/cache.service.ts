@@ -1,9 +1,15 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cacheable } from 'cacheable';
 
+interface CacheEntry {
+  key: string;
+  expiresAt: number;
+}
+
 @Injectable()
 export class CacheService {
   private readonly logger = new Logger(CacheService.name);
+  private readonly cacheKeys: Map<string, CacheEntry> = new Map();
 
   constructor(@Inject('CACHE_INSTANCE') private readonly cache: Cacheable) {}
 
@@ -24,6 +30,11 @@ export class CacheService {
       const ttlToUse = ttl || 24 * 60 * 60 * 1000; // Default to 24 hours if not specified
       this.logger.debug(`Caching data for key: ${key} with TTL: ${ttlToUse}ms`);
       await this.cache.set(key, value, ttlToUse);
+
+      // Store key with expiration time for tracking
+      const expiresAt = Date.now() + ttlToUse;
+      this.cacheKeys.set(key, { key, expiresAt });
+
       this.logger.debug(`Successfully cached ${key}`);
     } catch (error) {
       this.logger.error(`Failed to cache ${key}:`, error);
@@ -34,6 +45,7 @@ export class CacheService {
     try {
       this.logger.debug(`Deleting cached data for key: ${key}`);
       await this.cache.delete(key);
+      this.cacheKeys.delete(key);
       this.logger.debug(`Successfully deleted cache for ${key}`);
     } catch (error) {
       this.logger.error(`Failed to delete cache for ${key}:`, error);
@@ -59,9 +71,87 @@ export class CacheService {
     try {
       this.logger.debug('Clearing all cache');
       await this.cache.clear();
+      this.cacheKeys.clear();
       this.logger.debug('Cache cleared successfully');
     } catch (error) {
       this.logger.error('Failed to clear cache:', error);
     }
+  }
+
+  /**
+   * Refresh the TTL for a cache key
+   * @param key Cache key
+   * @param ttl New TTL in milliseconds
+   */
+  async refreshTtl(key: string, ttl?: number): Promise<void> {
+    try {
+      const value = await this.get(key);
+      if (value !== undefined) {
+        await this.set(key, value, ttl);
+        this.logger.debug(`Refreshed TTL for ${key}`);
+      }
+    } catch (error) {
+      this.logger.error(`Failed to refresh TTL for ${key}:`, error);
+    }
+  }
+
+  /**
+   * Get remaining TTL for a cache key (estimated based on our tracking)
+   * @param key Cache key
+   * @returns TTL in milliseconds or undefined if key doesn't exist
+   */
+  getRemainingTtl(key: string): number | undefined {
+    const entry = this.cacheKeys.get(key);
+    if (entry) {
+      const remaining = entry.expiresAt - Date.now();
+      return remaining > 0 ? remaining : undefined;
+    }
+    return undefined;
+  }
+
+  /**
+   * Get all cached keys
+   * @returns Array of cache keys
+   */
+  getKeys(): string[] {
+    return Array.from(this.cacheKeys.keys());
+  }
+
+  /**
+   * Get keys that will expire soon (within the next timeframe)
+   * @param timeframe Timeframe in milliseconds (default 5 minutes)
+   * @returns Array of keys that will expire soon
+   */
+  getExpiringSoonKeys(timeframe: number = 5 * 60 * 1000): string[] {
+    const now = Date.now();
+    const expiringSoon: string[] = [];
+
+    this.cacheKeys.forEach((entry) => {
+      if (entry.expiresAt - now < timeframe) {
+        expiringSoon.push(entry.key);
+      }
+    });
+
+    return expiringSoon;
+  }
+
+  /**
+   * Get cache stats
+   * @returns Object with cache statistics
+   */
+  async getStats(): Promise<{
+    totalKeys: number;
+    keys: string[];
+    expiringSoon: string[];
+    status: string;
+  }> {
+    const keys = this.getKeys();
+    const expiringSoon = this.getExpiringSoonKeys();
+    return {
+      totalKeys: keys.length,
+      keys,
+      expiringSoon,
+      status: 'available',
+    };
   }
 }

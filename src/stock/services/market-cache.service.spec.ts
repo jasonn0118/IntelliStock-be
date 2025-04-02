@@ -67,8 +67,12 @@ describe('MarketCacheService', () => {
       const ttl = 3600; // 1 hour in seconds
       await service.cacheMarketData(testKey, testData, ttl);
 
-      // Check if ttl is passed correctly (service converts to milliseconds internally)
-      expect(cacheService.set).toHaveBeenCalledWith(testKey, testData, ttl);
+      // Check if ttl is passed correctly (service converts seconds to milliseconds internally)
+      expect(cacheService.set).toHaveBeenCalledWith(
+        testKey,
+        testData,
+        ttl * 1000,
+      );
     });
 
     it('should handle errors gracefully and rethrow them', async () => {
