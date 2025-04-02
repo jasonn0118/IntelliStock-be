@@ -13,7 +13,7 @@
     "start:debug": "cross-env NODE_ENV=development nest start --debug --watch",
     "start:prod": "cross-env NODE_ENV=production node dist/main.js",
     "prebuild:prod": "rimraf dist",
-    "build:prod": "cross-env NODE_ENV=production nest build --webpack",
+    "build:prod": "cross-env NODE_ENV=production nest build",
     "typeorm": "typeorm-ts-node-commonjs",
     "migration:create": "typeorm-ts-node-commonjs migration:create",
     "migration:generate": "typeorm-ts-node-commonjs migration:generate -d ./src/database/data-source.ts",
