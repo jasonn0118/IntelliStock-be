@@ -7,15 +7,9 @@ import {
   Param,
   Post,
   Query,
-  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { CacheKey, CacheTTL } from '../common/decorators/cache.decorators';
-import { Roles } from '../common/decorators/user-role.decorator';
-import { UserRole } from '../users/constants/user-contants';
-import { RoleGuard } from '../users/guards/role.guard';
 import { MarketSummaryResponseDto } from './dtos/market-summary.dto';
 import { SearchStockDto } from './dtos/search-stock.dto';
 import { StockDynamicDto } from './dtos/stock-dynamic.dto';
@@ -38,8 +32,8 @@ export class StocksController {
   ) {}
 
   @Post('import-list')
-  @UseGuards(JwtAuthGuard, RoleGuard)
-  @Roles(UserRole.ADMIN)
+  // @UseGuards(JwtAuthGuard, RoleGuard)
+  // @Roles(UserRole.ADMIN)
   @ApiOperation({
     summary: 'Import stock list from external source (Admin only)',
   })
@@ -52,8 +46,6 @@ export class StocksController {
   }
 
   @Get('symbols')
-  @CacheKey('stock-symbols')
-  @CacheTTL(24 * 60 * 60)
   @ApiOperation({ summary: 'Get list of all stock symbols' })
   @ApiResponse({
     status: 200,
