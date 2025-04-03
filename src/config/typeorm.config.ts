@@ -7,6 +7,7 @@ export class TypeOrmConfigService implements TypeOrmOptionsFactory {
   constructor(private configService: ConfigService) {}
 
   createTypeOrmOptions(): Promise<TypeOrmModuleOptions> | TypeOrmModuleOptions {
+    const isDevelopment = this.configService.get('NODE_ENV') === 'development';
     return {
       type: 'postgres',
       host: this.configService.get('DB_HOST'),
@@ -14,10 +15,14 @@ export class TypeOrmConfigService implements TypeOrmOptionsFactory {
       username: this.configService.get('DB_USERNAME'),
       password: this.configService.get('DB_PASSWORD'),
       database: this.configService.get('DB_NAME'),
-      entities: [__dirname + '/../**/*.entity{.ts,.js}'],
+      entities: isDevelopment
+        ? ['**/*.entity{.ts,.js}']
+        : ['dist/src/**/*.entity{.js}'],
       synchronize: false,
       migrationsRun: true,
-      migrations: [__dirname + '/../migrations/*{.ts,.js}'],
+      migrations: isDevelopment
+        ? ['src/migrations/*.ts']
+        : ['dist/src/migrations/*.js'],
       extra: {
         // Ensure extension is available when TypeORM syncs
         installExtensions: true,
