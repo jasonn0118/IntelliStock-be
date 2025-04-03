@@ -17,7 +17,7 @@ export class TypeOrmConfigService implements TypeOrmOptionsFactory {
       entities: [__dirname + '/../**/*.entity{.ts,.js}'],
       synchronize: false,
       migrationsRun: true,
-      migrations: ['src/migrations/*.{.ts,.js}'],
+      migrations: [__dirname + '/../migrations/*{.ts,.js}'],
       extra: {
         // Ensure extension is available when TypeORM syncs
         installExtensions: true,
