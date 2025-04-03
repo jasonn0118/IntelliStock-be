@@ -15,14 +15,10 @@ export class TypeOrmConfigService implements TypeOrmOptionsFactory {
       username: this.configService.get('DB_USERNAME'),
       password: this.configService.get('DB_PASSWORD'),
       database: this.configService.get('DB_NAME'),
-      entities: isProduction
-        ? ['dist/src/**/*.entity.js']
-        : ['**/*.entity{.ts,.js}'],
+      entities: ['src/**/*.entity.{ts,js}'],
       synchronize: false,
       migrationsRun: true,
-      migrations: isProduction
-        ? ['src/migrations/*{.ts,.js}']
-        : ['dist/src/migrations/*.js'],
+      migrations: ['src/migrations/*.{ts,js}'],
       extra: {
         installExtensions: true,
       },
