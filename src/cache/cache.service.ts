@@ -15,9 +15,7 @@ export class CacheService {
 
   async get<T>(key: string): Promise<T | undefined> {
     try {
-      this.logger.debug(`Getting cached data for key: ${key}`);
       const data = await this.cache.get<T>(key);
-      this.logger.debug(`Cache ${key}: ${data ? 'HIT' : 'MISS'}`);
       return data;
     } catch (error) {
       this.logger.error(`Failed to get cached ${key}:`, error);
@@ -27,15 +25,11 @@ export class CacheService {
 
   async set<T>(key: string, value: T, ttl?: number): Promise<void> {
     try {
-      const ttlToUse = ttl || 24 * 60 * 60 * 1000; // Default to 24 hours if not specified
-      this.logger.debug(`Caching data for key: ${key} with TTL: ${ttlToUse}ms`);
+      const ttlToUse = ttl || 24 * 60 * 60 * 1000;
       await this.cache.set(key, value, ttlToUse);
 
-      // Store key with expiration time for tracking
       const expiresAt = Date.now() + ttlToUse;
       this.cacheKeys.set(key, { key, expiresAt });
-
-      this.logger.debug(`Successfully cached ${key}`);
     } catch (error) {
       this.logger.error(`Failed to cache ${key}:`, error);
     }
@@ -43,10 +37,8 @@ export class CacheService {
 
   async delete(key: string): Promise<void> {
     try {
-      this.logger.debug(`Deleting cached data for key: ${key}`);
       await this.cache.delete(key);
       this.cacheKeys.delete(key);
-      this.logger.debug(`Successfully deleted cache for ${key}`);
     } catch (error) {
       this.logger.error(`Failed to delete cache for ${key}:`, error);
     }
@@ -69,10 +61,8 @@ export class CacheService {
    */
   async clear(): Promise<void> {
     try {
-      this.logger.debug('Clearing all cache');
       await this.cache.clear();
       this.cacheKeys.clear();
-      this.logger.debug('Cache cleared successfully');
     } catch (error) {
       this.logger.error('Failed to clear cache:', error);
     }
@@ -88,7 +78,6 @@ export class CacheService {
       const value = await this.get(key);
       if (value !== undefined) {
         await this.set(key, value, ttl);
-        this.logger.debug(`Refreshed TTL for ${key}`);
       }
     } catch (error) {
       this.logger.error(`Failed to refresh TTL for ${key}:`, error);
