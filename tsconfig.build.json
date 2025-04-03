@@ -1,7 +1,6 @@
 {
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src",
     "removeComments": true,
     "sourceMap": true,
     "declaration": true,
