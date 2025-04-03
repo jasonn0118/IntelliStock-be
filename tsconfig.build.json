@@ -2,9 +2,6 @@
   "compilerOptions": {
     "outDir": "./dist",
     "removeComments": true,
-    "sourceMap": true,
-    "declaration": true,
-    "declarationMap": true,
   },
   "extends": "./tsconfig.json",
   "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
