@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminInternalRoleGuard } from '../users/guards/admin-internal-role.guard';
 import { CompaniesController } from './companies.controller';
 import { CompaniesService } from './companies.service';
+import { CompanyMappingService } from './services/company-mapping.service';
 
 const mockJwtAuthGuard = { canActivate: jest.fn(() => true) };
 const mockAdminInternalRoleGuard = { canActivate: jest.fn(() => true) };
@@ -34,6 +35,17 @@ describe('CompaniesController', () => {
               ticker: 'AAPL',
             }),
             updateCompanyLogos: jest.fn().mockResolvedValue({ success: true }),
+            getLogoUrl: jest
+              .fn()
+              .mockReturnValue('https://example.com/logo/aapl'),
+          },
+        },
+        {
+          provide: CompanyMappingService,
+          useValue: {
+            mapYahooResponseToProfileDto: jest
+              .fn()
+              .mockReturnValue(mockCompanyProfile),
           },
         },
       ],

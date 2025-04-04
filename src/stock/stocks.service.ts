@@ -535,7 +535,13 @@ export class StocksService {
       try {
         companyData = await this.companiesService.updateCompanyProfile(
           quote.symbol as string,
-          yahooData.assetProfile as Record<string, unknown>,
+          {
+            price: {
+              longName:
+                (yahooData.price as any)?.longName || (quote.symbol as string),
+            },
+            assetProfile: yahooData.assetProfile || {},
+          },
         );
         this.logger.log(
           `Company profile for ${quote.symbol} updated successfully with Yahoo data`,

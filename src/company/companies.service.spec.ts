@@ -1,16 +1,14 @@
-// First mock the module
 jest.mock('yahoo-finance2', () => ({
   default: {
     quoteSummary: jest.fn(),
   },
 }));
 
-// Then import
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import yahooFinance from 'yahoo-finance2'; // Default import
+import yahooFinance from 'yahoo-finance2';
 import { Stock } from '../stock/stock.entity';
 import { CompaniesService } from './companies.service';
 import { Company } from './company.entity';
@@ -121,15 +119,23 @@ describe('CompaniesService', () => {
     it('should fetch company profile from Yahoo Finance', async () => {
       const symbol = 'AAPL';
       mockedQuoteSummary.mockResolvedValueOnce({
+        price: {
+          longName: 'Apple Inc.',
+        },
         assetProfile: mockAssetProfile,
-      } as any);
+      });
 
       const result = await service.fetchCompanyProfile(symbol);
 
       expect(mockedQuoteSummary).toHaveBeenCalledWith(symbol, {
-        modules: ['assetProfile'],
+        modules: ['price', 'assetProfile'],
       });
-      expect(result).toEqual(mockAssetProfile);
+      expect(result).toEqual({
+        price: {
+          longName: 'Apple Inc.',
+        },
+        assetProfile: mockAssetProfile,
+      });
     });
 
     it('should throw error when Yahoo Finance API fails', async () => {
@@ -146,9 +152,14 @@ describe('CompaniesService', () => {
       const symbol = 'AAPL';
       const existingCompany = { ...mockCompany };
       const updatedProfile = {
-        ...mockAssetProfile,
-        fullTimeEmployees: 160000,
-        ceo: 'Timothy Cook',
+        price: {
+          longName: 'Apple Inc.',
+        },
+        assetProfile: {
+          ...mockAssetProfile,
+          fullTimeEmployees: 160000,
+          ceo: 'Timothy Cook',
+        },
       };
 
       jest
@@ -167,9 +178,7 @@ describe('CompaniesService', () => {
         companyId: existingCompany.id,
         company: existingCompany,
       } as any);
-      mockedQuoteSummary.mockResolvedValueOnce({
-        assetProfile: updatedProfile,
-      } as any);
+      mockedQuoteSummary.mockResolvedValueOnce(updatedProfile);
 
       const result = await service.updateCompanyProfile(symbol);
 
@@ -201,11 +210,11 @@ describe('CompaniesService', () => {
       } as any);
       jest.spyOn(stockRepository, 'save').mockResolvedValueOnce({} as any);
       mockedQuoteSummary.mockResolvedValueOnce({
-        assetProfile: {
-          ...mockAssetProfile,
-          name: 'Microsoft Corporation',
+        price: {
+          longName: 'Microsoft Corporation',
         },
-      } as any);
+        assetProfile: mockAssetProfile,
+      });
 
       const result = await service.updateCompanyProfile(symbol);
 
@@ -220,9 +229,13 @@ describe('CompaniesService', () => {
     it('should use provided company data if available', async () => {
       const symbol = 'GOOG';
       const companyData = {
-        name: 'Alphabet Inc.',
-        sector: 'Technology',
-        industry: 'Internet Content & Information',
+        price: {
+          longName: 'Alphabet Inc.',
+        },
+        assetProfile: {
+          sector: 'Technology',
+          industry: 'Internet Content & Information',
+        },
       };
 
       jest.spyOn(companyRepository, 'findOne').mockResolvedValueOnce(null);

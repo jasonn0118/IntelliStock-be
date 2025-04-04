@@ -12,11 +12,15 @@ import { CompaniesService } from './companies.service';
 import { CompanyProfileDto } from './dtos/company-profile.dto';
 import { CompanyUpdateResponseDto } from './dtos/company-update-response.dto';
 import { LogoUpdateResponseDto } from './dtos/logo-update-response.dto';
+import { CompanyMappingService } from './services/company-mapping.service';
 
 @ApiTags('companies')
 @Controller('companies')
 export class CompaniesController {
-  constructor(private readonly companiesService: CompaniesService) {}
+  constructor(
+    private readonly companiesService: CompaniesService,
+    private readonly companyMappingService: CompanyMappingService,
+  ) {}
 
   @Get('profile/:ticker')
   @ApiOperation({ summary: 'Get company profile information by ticker symbol' })
@@ -37,7 +41,16 @@ export class CompaniesController {
   async getCompanyProfile(
     @Param('ticker') ticker: string,
   ): Promise<CompanyProfileDto> {
-    return await this.companiesService.fetchCompanyProfile(ticker);
+    const yahooData = await this.companiesService.fetchCompanyProfile(ticker);
+    const profileDto = this.companyMappingService.mapYahooResponseToProfileDto(
+      yahooData,
+      ticker,
+    );
+
+    // Set the logo URL
+    profileDto.logoUrl = this.companiesService.getLogoUrl(ticker);
+
+    return profileDto;
   }
 
   @UseGuards(JwtAuthGuard, AdminInternalRoleGuard)

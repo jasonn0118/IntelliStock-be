@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import yahooFinance from 'yahoo-finance2';
 import { Stock } from '../stock/stock.entity';
 import { Company } from './company.entity';
+import { YahooQuoteSummaryResponse } from './interfaces/yahoo-finance.interface';
 
 @Injectable()
 export class CompaniesService {
@@ -21,17 +22,29 @@ export class CompaniesService {
     this.logoDevToken = this.configService.get<string>('LOGO_DEV_TOKEN');
   }
 
-  private getLogoUrl(symbol: string): string {
+  /**
+   * Generates a logo URL for a stock symbol
+   * @param symbol Stock ticker symbol
+   * @returns Logo URL
+   */
+  public getLogoUrl(symbol: string): string {
     return `https://img.logo.dev/ticker/${symbol.toLowerCase()}?format=webp&retina=true&token=${this.logoDevToken}`;
   }
 
-  async fetchCompanyProfile(symbol: string): Promise<any> {
+  /**
+   * Fetches company profile information from Yahoo Finance
+   * @param symbol Stock ticker symbol
+   * @returns Yahoo Finance quote summary response
+   */
+  async fetchCompanyProfile(
+    symbol: string,
+  ): Promise<YahooQuoteSummaryResponse> {
     try {
       const queryOptions = {
-        modules: ['assetProfile' as const],
+        modules: ['price' as const, 'assetProfile' as const],
       };
       const result = await yahooFinance.quoteSummary(symbol, queryOptions);
-      return result.assetProfile;
+      return result as YahooQuoteSummaryResponse;
     } catch (error) {
       this.logger.error(
         `Error fetching company profile for ${symbol}`,
@@ -41,74 +54,113 @@ export class CompaniesService {
     }
   }
 
-  private updateCompanyFields(company: Company, profile: any): Company {
-    if (profile.name && company.name !== profile.name) {
-      company.name = profile.name;
-    } else if (profile.longName && company.name !== profile.longName) {
-      company.name = profile.longName;
-    }
-
-    if (profile.sector && company.sector !== profile.sector) {
-      company.sector = profile.sector;
-    }
-
-    if (profile.industry && company.industry !== profile.industry) {
-      company.industry = profile.industry;
-    }
-
-    if (profile.website && company.website !== profile.website) {
-      company.website = profile.website;
-    }
-
-    if (profile.description && company.description !== profile.description) {
-      company.description = profile.description;
-    } else if (
-      profile.longBusinessSummary &&
-      company.description !== profile.longBusinessSummary
-    ) {
-      company.description = profile.longBusinessSummary;
-    }
-
-    if (profile.ceo && company.ceo !== profile.ceo) {
-      company.ceo = profile.ceo;
-    } else if (
-      profile.companyOfficers?.[0]?.name &&
-      company.ceo !== profile.companyOfficers[0].name
-    ) {
-      company.ceo = profile.companyOfficers[0].name;
-    }
-
-    if (profile.country && company.country !== profile.country) {
-      company.country = profile.country;
+  /**
+   * Updates a Company entity with data from Yahoo Finance profile
+   * @param company Company entity to update
+   * @param profile Yahoo Finance profile data
+   * @returns Updated Company entity
+   */
+  private updateCompanyFields(
+    company: Company,
+    profile: YahooQuoteSummaryResponse,
+  ): Company {
+    if (profile.price.longName && company.name !== profile.price.longName) {
+      company.name = profile.price.longName;
     }
 
     if (
-      profile.fullTimeEmployees &&
-      company.fullTimeEmployees !== profile.fullTimeEmployees
+      profile.assetProfile.sector &&
+      company.sector !== profile.assetProfile.sector
     ) {
-      company.fullTimeEmployees = profile.fullTimeEmployees.toString();
+      company.sector = profile.assetProfile.sector;
     }
 
-    if (profile.phone && company.phone !== profile.phone) {
-      company.phone = profile.phone;
+    if (
+      profile.assetProfile.industry &&
+      company.industry !== profile.assetProfile.industry
+    ) {
+      company.industry = profile.assetProfile.industry;
     }
 
-    if (profile.address && company.address !== profile.address) {
-      company.address = profile.address;
-    } else if (profile.address1 && company.address !== profile.address1) {
-      company.address = profile.address1;
+    if (
+      profile.assetProfile.website &&
+      company.website !== profile.assetProfile.website
+    ) {
+      company.website = profile.assetProfile.website;
     }
 
-    if (profile.city && company.city !== profile.city) {
-      company.city = profile.city;
+    if (
+      profile.assetProfile.description &&
+      company.description !== profile.assetProfile.description
+    ) {
+      company.description = profile.assetProfile.description;
+    } else if (
+      profile.assetProfile.longBusinessSummary &&
+      company.description !== profile.assetProfile.longBusinessSummary
+    ) {
+      company.description = profile.assetProfile.longBusinessSummary;
     }
 
-    if (profile.state && company.state !== profile.state) {
-      company.state = profile.state;
+    if (profile.assetProfile.ceo && company.ceo !== profile.assetProfile.ceo) {
+      company.ceo = profile.assetProfile.ceo;
+    } else if (
+      profile.assetProfile.companyOfficers?.[0]?.name &&
+      company.ceo !== profile.assetProfile.companyOfficers[0].name
+    ) {
+      company.ceo = profile.assetProfile.companyOfficers[0].name;
     }
 
-    if (profile.zip && company.zip !== profile.zip) {
-      company.zip = profile.zip;
+    if (
+      profile.assetProfile.country &&
+      company.country !== profile.assetProfile.country
+    ) {
+      company.country = profile.assetProfile.country;
+    }
+
+    if (
+      profile.assetProfile.fullTimeEmployees &&
+      company.fullTimeEmployees !==
+        profile.assetProfile.fullTimeEmployees.toString()
+    ) {
+      company.fullTimeEmployees =
+        profile.assetProfile.fullTimeEmployees.toString();
+    }
+
+    if (
+      profile.assetProfile.phone &&
+      company.phone !== profile.assetProfile.phone
+    ) {
+      company.phone = profile.assetProfile.phone;
+    }
+
+    if (
+      profile.assetProfile.address &&
+      company.address !== profile.assetProfile.address
+    ) {
+      company.address = profile.assetProfile.address;
+    } else if (
+      profile.assetProfile.address1 &&
+      company.address !== profile.assetProfile.address1
+    ) {
+      company.address = profile.assetProfile.address1;
+    }
+
+    if (
+      profile.assetProfile.city &&
+      company.city !== profile.assetProfile.city
+    ) {
+      company.city = profile.assetProfile.city;
+    }
+
+    if (
+      profile.assetProfile.state &&
+      company.state !== profile.assetProfile.state
+    ) {
+      company.state = profile.assetProfile.state;
+    }
+
+    if (profile.assetProfile.zip && company.zip !== profile.assetProfile.zip) {
+      company.zip = profile.assetProfile.zip;
     }
 
     return company;
@@ -121,10 +173,10 @@ export class CompaniesService {
    */
   async updateCompanyProfile(
     symbol: string,
-    companyData?: any,
+    companyData?: YahooQuoteSummaryResponse,
   ): Promise<Company> {
     try {
-      let profile: any;
+      let profile: YahooQuoteSummaryResponse;
 
       if (companyData) {
         profile = companyData;
@@ -132,7 +184,9 @@ export class CompaniesService {
         profile = await this.fetchCompanyProfile(symbol);
       }
 
-      if (!profile || !profile.name) {
+      this.logger.log(`Profile: ${JSON.stringify(profile.price.longName)}`);
+
+      if (!profile || !profile.price.longName) {
         this.logger.warn(`Skipping empty profile for ${symbol}`);
         return null;
       }
@@ -141,25 +195,33 @@ export class CompaniesService {
         where: { ticker: symbol },
       });
 
+      this.logger.log(`Company: ${JSON.stringify(company)}`);
+
       if (company) {
         company = this.updateCompanyFields(company, profile);
         this.logger.log(`Updating existing company: ${symbol}`);
       } else {
         company = new Company();
         company.ticker = symbol;
-        company.name = profile.name;
-        company.sector = profile.sector;
-        company.industry = profile.industry;
-        company.website = profile.website;
-        company.description = profile.description;
-        company.ceo = profile.ceo;
-        company.country = profile.country;
-        company.fullTimeEmployees = profile.fullTimeEmployees;
-        company.phone = profile.phone;
-        company.address = profile.address;
-        company.city = profile.city;
-        company.state = profile.state;
-        company.zip = profile.zip;
+        company.name = profile.price.longName;
+        company.sector = profile.assetProfile.sector;
+        company.industry = profile.assetProfile.industry;
+        company.website = profile.assetProfile.website;
+        company.description =
+          profile.assetProfile.description ||
+          profile.assetProfile.longBusinessSummary;
+        company.ceo =
+          profile.assetProfile.ceo ||
+          profile.assetProfile.companyOfficers?.[0]?.name;
+        company.country = profile.assetProfile.country;
+        company.fullTimeEmployees =
+          profile.assetProfile.fullTimeEmployees?.toString();
+        company.phone = profile.assetProfile.phone;
+        company.address =
+          profile.assetProfile.address || profile.assetProfile.address1;
+        company.city = profile.assetProfile.city;
+        company.state = profile.assetProfile.state;
+        company.zip = profile.assetProfile.zip;
         this.logger.log(`Creating new company: ${symbol}`);
       }
 
