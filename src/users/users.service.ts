@@ -59,7 +59,6 @@ export class UsersService {
     newRole: UserRole,
     currentUser?: User,
   ): Promise<User> {
-    // Don't allow users to modify their own role if currentUser is provided
     if (currentUser && currentUser.id === id) {
       throw new ForbiddenException('You cannot modify your own role');
     }
