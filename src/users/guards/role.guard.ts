@@ -21,7 +21,6 @@ export class RoleGuard implements CanActivate {
     );
 
     if (!requiredRoles) {
-      // If there are no roles defined, then the route is public
       return true;
     }
 
