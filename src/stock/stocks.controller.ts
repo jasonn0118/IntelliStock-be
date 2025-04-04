@@ -7,9 +7,12 @@ import {
   Param,
   Post,
   Query,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AdminInternalRoleGuard } from '../users/guards/admin-internal-role.guard';
 import { MarketSummaryResponseDto } from './dtos/market-summary.dto';
 import { SearchStockDto } from './dtos/search-stock.dto';
 import { StockDynamicDto } from './dtos/stock-dynamic.dto';
@@ -31,9 +34,8 @@ export class StocksController {
     private readonly marketCacheService: MarketCacheService,
   ) {}
 
+  @UseGuards(JwtAuthGuard, AdminInternalRoleGuard)
   @Post('import-list')
-  // @UseGuards(JwtAuthGuard, RoleGuard)
-  // @Roles(UserRole.ADMIN)
   @ApiOperation({
     summary: 'Import stock list from external source (Admin only)',
   })
@@ -193,23 +195,26 @@ export class StocksController {
     return dynamicDto;
   }
 
-  // FIXME: Remove below these endpoints eventually
   @Post('fetch-quotes')
-  // @UseGuards(JwtAuthGuard, RoleGuard)
-  // @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Fetch and save daily stock quotes' })
+  @UseGuards(JwtAuthGuard, AdminInternalRoleGuard)
+  @ApiOperation({
+    summary: 'Fetch and save daily stock quotes (Admin/Internal only)',
+  })
   @ApiResponse({
     status: 201,
     description: 'Daily quotes fetched and saved successfully',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Requires Admin or Internal User role',
   })
   async fetchQuotes() {
     await this.stocksService.fetchAndSaveDailyQuotes();
   }
 
   @Post('generate-summaries')
-  // @UseGuards(JwtAuthGuard, RoleGuard)
-  // @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Generate market summaries' })
+  @UseGuards(JwtAuthGuard, AdminInternalRoleGuard)
+  @ApiOperation({ summary: 'Generate market summaries (Admin/Internal only)' })
   @ApiResponse({
     status: 201,
     description: 'Market summaries generation triggered successfully',
@@ -223,6 +228,10 @@ export class StocksController {
       },
     },
   })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Requires Admin or Internal User role',
+  })
   async generateMarketSummaries() {
     await this.stockDataScheduler.handleGenerateMarketSummaries();
     return { message: 'Market summaries generation triggered successfully' };
@@ -235,7 +244,6 @@ export class StocksController {
     description: 'Returns information about the current cache status',
   })
   async getCacheStatus() {
-    // Test the cache by setting and getting a value
     const testKey = 'cache-test';
     const testValue = {
       timestamp: new Date().toISOString(),
@@ -246,7 +254,6 @@ export class StocksController {
     const cachedValue =
       await this.marketCacheService.getCachedMarketData(testKey);
 
-    // Get detailed cache statistics
     const cacheStats = await this.marketCacheService.getCacheStats();
 
     return {
