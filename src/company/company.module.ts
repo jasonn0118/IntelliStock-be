@@ -1,15 +1,15 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Company } from './company.entity';
-import { HttpModule } from '@nestjs/axios';
+import { Stock } from '../stock/stock.entity';
 import { CompaniesController } from './companies.controller';
 import { CompaniesService } from './companies.service';
-import { Stock } from 'src/stock/stock.entity';
+import { Company } from './company.entity';
+import { CompanyMappingService } from './services/company-mapping.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Company, Stock]), HttpModule],
+  imports: [TypeOrmModule.forFeature([Company, Stock])],
   controllers: [CompaniesController],
-  providers: [CompaniesService],
-  exports: [CompaniesService],
+  providers: [CompaniesService, CompanyMappingService],
+  exports: [CompaniesService, CompanyMappingService],
 })
 export class CompanyModule {}
