@@ -196,7 +196,6 @@ export class StocksService {
    * @returns Array of stock quotes ordered by market cap
    */
   async getTopStocksByMarketCap(): Promise<StockQuote[]> {
-    // Get the most recent date for which we have stock quotes
     const latestQuoteDate = await this.stockQuoteRepository
       .createQueryBuilder('sq')
       .select('MAX(sq.date)', 'maxDate')
@@ -207,7 +206,6 @@ export class StocksService {
       return [];
     }
 
-    // Check if the latest date is today or the most recent market day
     if (!this.isLatestMarketDay(new Date(latestQuoteDate.maxDate))) {
       this.logger.warn('No data available for the latest market day');
       return [];
@@ -236,7 +234,6 @@ export class StocksService {
    * @returns Array of stock quotes ordered by percentage change
    */
   async getTopGainers(): Promise<StockQuote[]> {
-    // Get the most recent date for which we have stock quotes
     const latestQuoteDate = await this.stockQuoteRepository
       .createQueryBuilder('sq')
       .select('MAX(sq.date)', 'maxDate')
@@ -247,7 +244,6 @@ export class StocksService {
       return [];
     }
 
-    // Check if the latest date is today or the most recent market day
     if (!this.isLatestMarketDay(new Date(latestQuoteDate.maxDate))) {
       this.logger.warn('No data available for the latest market day');
       return [];
@@ -283,7 +279,6 @@ export class StocksService {
    * @returns Stock entity with company details, latest quote, and statistics
    */
   async getStock(ticker: string): Promise<Stock> {
-    // Find the stock with eager loading of company
     const stock = await this.stockRepository.findOne({
       where: { ticker },
       relations: ['company'],
@@ -293,11 +288,10 @@ export class StocksService {
       return null;
     }
 
-    // Get the latest quote with statistics in a single query
     const latestQuote = await this.stockQuoteRepository
       .createQueryBuilder('sq')
       .innerJoinAndSelect('sq.stock', 's')
-      .leftJoinAndSelect('sq.statistic', 'ss') // Use the one-to-one relationship
+      .leftJoinAndSelect('sq.statistic', 'ss')
       .where('s.ticker = :ticker', { ticker })
       .orderBy('sq.date', 'DESC')
       .limit(1)
@@ -306,7 +300,6 @@ export class StocksService {
     if (latestQuote) {
       stock.quotes = [latestQuote];
 
-      // If we have a statistic attached to this quote, add it to the stock
       if (latestQuote.statistic) {
         stock.statistics = [latestQuote.statistic];
       }
@@ -475,7 +468,6 @@ export class StocksService {
 
         const newQuote = this.createBasicQuote(quote, stock, quoteDate);
 
-        // Save the quote to the database
         const savedQuote = await this.stockQuoteRepository.save(newQuote);
 
         const basicEmbeddingText = this.createEmbeddingText(quote, savedQuote);
@@ -505,10 +497,8 @@ export class StocksService {
     let statisticData = null;
     let companyData = null;
 
-    // Create stock quote first
     const newQuote = this.createBasicQuote(quote, stock, quoteDate);
 
-    // Save quote to get an ID
     const savedQuote = await this.stockQuoteRepository.save(newQuote);
 
     if (yahooData.defaultKeyStatistics) {
@@ -519,7 +509,7 @@ export class StocksService {
             stock,
             quoteDate,
             yahooData.defaultKeyStatistics as Record<string, unknown>,
-            savedQuote, // Pass the saved quote
+            savedQuote,
           );
         this.logger.log(
           `Statistics for ${quote.symbol} stored successfully via service`,
@@ -1011,7 +1001,6 @@ export class StocksService {
   async getMarketSummary(date: Date): Promise<MarketSummaryResponseDto> {
     const compositeData = await this.getNasdaqComposite();
 
-    // Generate AI analysis
     const aiAnalysis =
       await this.aiMarketAnalysisService.generateMarketAnalysis({
         date: new Date(date),
@@ -1381,7 +1370,6 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
           ? stock.statistics[0]
           : null;
 
-      // Format the prompt with stock data
       const prompt = this.formatStockAnalysisPrompt(
         stock,
         latestQuote,
@@ -1389,11 +1377,9 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
         true,
       );
 
-      // Use existing AI market analysis service which should already have OpenAI integration
       const analysis =
         await this.aiMarketAnalysisService.generateCustomAnalysis(prompt);
 
-      // Parse the response to extract JSON and markdown portions
       const structuredResponse = this.extractStructuredData(
         analysis,
         stock,
@@ -1451,13 +1437,11 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
     };
   } {
     try {
-      // Try to extract a JSON block if it exists
       const jsonMatch = response.match(/```json\n([\s\S]*?)\n```/);
 
       if (jsonMatch && jsonMatch[1]) {
         try {
           const jsonData = JSON.parse(jsonMatch[1]);
-          // Check if the JSON has the expected structure
           if (jsonData.ticker && jsonData.analysis) {
             return jsonData;
           }
@@ -1466,8 +1450,6 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
         }
       }
 
-      // If no valid JSON found or it doesn't have the expected structure,
-      // create a structured response from the markdown content
       return {
         ticker: stock.ticker,
         analysis: {
@@ -1535,7 +1517,6 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
     statistic: StockStatistic | null,
     structuredOutput: boolean = false,
   ): string {
-    // Build company info section
     const companyInfo = `Company Info:
 - Name: ${stock.name}
 - Exchange: ${stock.exchange || 'NASDAQ'}
@@ -1552,7 +1533,6 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
         : ''
     }`;
 
-    // Build quote section
     const quoteInfo = `Quote (as of ${quote.date || new Date(quote.timestamp).toISOString().split('T')[0]}):
 - Price: $${Number(quote.price).toFixed(2)} (${quote.changesPercentage >= 0 ? '↑' : '↓'} ${Number(quote.changesPercentage).toFixed(2)}%)
 - Market Cap: $${quote.marketCap ? (Number(quote.marketCap) / 1000000).toFixed(2) + 'M' : 'N/A'}
@@ -1564,10 +1544,8 @@ Exchange Timezone: ${compositeData.exchangeTimezoneName || 'America/New_York'} (
 - PriceAvg50: ${quote.priceAvg50 ? Number(quote.priceAvg50).toFixed(2) : 'N/A'}
 - PriceAvg200: ${quote.priceAvg200 ? Number(quote.priceAvg200).toFixed(2) : 'N/A'}`;
 
-    // Build statistics section if available
     let statisticsInfo = '';
     if (statistic) {
-      // Safely handle dates in statistics
       let lastFiscalYearEndStr = 'N/A';
       let mostRecentQuarterStr = 'N/A';
 
@@ -1712,13 +1690,11 @@ The JSON should contain concise text summaries of each section, better with nume
       const line = lines[i].trim();
       const lowerLine = line.toLowerCase();
 
-      // Check if line contains a heading indicator
       const isHeading =
         line.startsWith('#') ||
         (i > 0 &&
           (lines[i - 1].startsWith('===') || lines[i - 1].startsWith('---')));
 
-      // If it's a heading, check if it's one we're looking for
       if (
         isHeading &&
         possibleHeadings.some((heading) =>
@@ -1729,14 +1705,11 @@ The JSON should contain concise text summaries of each section, better with nume
         continue;
       }
 
-      // If it's a heading but not one we're looking for, end the section
       if (isHeading && inSection) {
         break;
       }
 
-      // Add content if we're in a relevant section
       if (inSection && line.length > 0) {
-        // Skip markdown link syntax and bullet points
         const cleanLine = line
           .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
           .replace(/^[*-] /, '');
@@ -1770,7 +1743,6 @@ The JSON should contain concise text summaries of each section, better with nume
    * Create a brief summary from the text
    */
   private createSummaryFromText(text: string): string {
-    // First try to find a conclusion paragraph
     const conclusionMatch = text.match(
       /(?:conclusion|summary|overall).*?:(.*?)(?:$|\n\n)/i,
     );
@@ -1778,7 +1750,6 @@ The JSON should contain concise text summaries of each section, better with nume
       return conclusionMatch[1].trim();
     }
 
-    // Otherwise use the first couple sentences
     const sentences = text.split(/[.!?]/).filter((s) => s.trim().length > 10);
     if (sentences.length > 0) {
       return sentences.slice(0, 2).join('.') + '.';
@@ -1796,14 +1767,12 @@ The JSON should contain concise text summaries of each section, better with nume
   ): string[] {
     const insights: string[] = [];
 
-    // Look for bullet points that might indicate strengths or risks
     const lines = text.split('\n');
     let inSection = false;
 
     for (const line of lines) {
       const lowerLine = line.toLowerCase();
 
-      // Check if we're entering a relevant section
       if (
         (type === 'strength' &&
           (lowerLine.includes('strength') ||
@@ -1821,7 +1790,6 @@ The JSON should contain concise text summaries of each section, better with nume
         continue;
       }
 
-      // Check if we're leaving a section (entering a new one)
       if (
         inSection &&
         (line.includes('# ') ||
@@ -1832,20 +1800,17 @@ The JSON should contain concise text summaries of each section, better with nume
         inSection = false;
       }
 
-      // Capture bullet points while in a relevant section
       if (
         inSection &&
         (line.trim().startsWith('-') || line.trim().startsWith('*'))
       ) {
         const point = line.trim().substring(1).trim();
         if (point.length > 5) {
-          // Ensure it's substantive
           insights.push(point);
         }
       }
     }
 
-    // If no structured points found, use heuristics to extract insights
     if (insights.length === 0) {
       const keywords =
         type === 'strength'
@@ -1873,7 +1838,7 @@ The JSON should contain concise text summaries of each section, better with nume
         const lowerSentence = sentence.toLowerCase();
         if (keywords.some((keyword) => lowerSentence.includes(keyword))) {
           insights.push(sentence.trim());
-          if (insights.length >= 3) break; // Limit to 3 if extracting this way
+          if (insights.length >= 3) break;
         }
       }
     }
@@ -1895,7 +1860,6 @@ The JSON should contain concise text summaries of each section, better with nume
   ): 'very_bearish' | 'bearish' | 'neutral' | 'bullish' | 'very_bullish' {
     const lowerText = text.toLowerCase();
 
-    // Count sentiment indicators
     const bearishTerms = [
       'bearish',
       'negative',
@@ -1955,11 +1919,9 @@ The JSON should contain concise text summaries of each section, better with nume
       0,
     );
 
-    // Add weighted counts for very bearish/bullish terms
     bearishCount += veryBearishCount * 2;
     bullishCount += veryBullishCount * 2;
 
-    // Determine sentiment based on counts
     if (veryBearishCount >= 2 || bearishCount > bullishCount + 5) {
       return 'very_bearish';
     } else if (veryBullishCount >= 2 || bullishCount > bearishCount + 5) {
