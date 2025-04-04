@@ -23,6 +23,11 @@ import { LocalAuthGuard } from './guards/local-auth.guard';
 export class AuthController {
   constructor(private authService: AuthService) {}
 
+  // Get the frontend URL from environment variables
+  private getFrontendUrl(): string {
+    return process.env.FRONTEND_URL || 'http://localhost:3001';
+  }
+
   @Post('/signup')
   async signUp(
     @Body() body: CreateUserDto,
@@ -63,9 +68,8 @@ export class AuthController {
     res.cookie('access_token', access_token, {
       httpOnly: true,
       path: '/',
-      // TODO: Update later secure to true in production
-      // secure: process.env.NODE_ENV === 'production',
-      // sameSite: 'strict',
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
     });
 
     return { role, firstName, lastName };
@@ -99,12 +103,12 @@ export class AuthController {
 
     res.cookie('access_token', access_token, {
       httpOnly: true,
-      // secure: process.env.NODE_ENV === 'production',
-      // sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
       path: '/',
     });
 
-    return res.redirect('http://localhost:3001');
+    return res.redirect(this.getFrontendUrl());
   }
 
   @Get('/github')
@@ -128,12 +132,12 @@ export class AuthController {
 
     res.cookie('access_token', access_token, {
       httpOnly: true,
-      // secure: process.env.NODE_ENV === 'production',
-      // sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
       path: '/',
     });
 
-    return res.redirect('http://localhost:3001');
+    return res.redirect(this.getFrontendUrl());
   }
 
   @UseGuards(JwtAuthGuard)

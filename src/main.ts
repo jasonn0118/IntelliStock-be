@@ -8,9 +8,11 @@ async function bootstrap() {
 
   app.use(cookieParser());
 
+  // Get the frontend URL from environment variables
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+
   app.enableCors({
-    // TODO: Update later origin to production URL
-    origin: 'http://localhost:3001',
+    origin: frontendUrl,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
