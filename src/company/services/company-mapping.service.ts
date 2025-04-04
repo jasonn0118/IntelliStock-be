@@ -39,7 +39,6 @@ export class CompanyMappingService {
     profileDto.state = yahooData.assetProfile.state || '';
     profileDto.zip = yahooData.assetProfile.zip || '';
 
-    // Logo URL will be generated in the controller or service
     profileDto.logoUrl = '';
 
     return profileDto;

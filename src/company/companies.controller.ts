@@ -47,7 +47,6 @@ export class CompaniesController {
       ticker,
     );
 
-    // Set the logo URL
     profileDto.logoUrl = this.companiesService.getLogoUrl(ticker);
 
     return profileDto;
