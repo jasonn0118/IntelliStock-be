@@ -184,8 +184,6 @@ export class CompaniesService {
         profile = await this.fetchCompanyProfile(symbol);
       }
 
-      this.logger.log(`Profile: ${JSON.stringify(profile.price.longName)}`);
-
       if (!profile || !profile.price.longName) {
         this.logger.warn(`Skipping empty profile for ${symbol}`);
         return null;
@@ -194,8 +192,6 @@ export class CompaniesService {
       let company = await this.companyRepository.findOne({
         where: { ticker: symbol },
       });
-
-      this.logger.log(`Company: ${JSON.stringify(company)}`);
 
       if (company) {
         company = this.updateCompanyFields(company, profile);
