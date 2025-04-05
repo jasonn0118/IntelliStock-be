@@ -28,10 +28,8 @@ export class CustomCacheInterceptor implements NestInterceptor {
       return next.handle();
     }
 
-    // Check if the endpoint has the no_cache metadata flag
     const noCache = this.reflector.get('no_cache', context.getHandler());
     if (noCache) {
-      // Skip caching for this endpoint
       return next.handle();
     }
 
