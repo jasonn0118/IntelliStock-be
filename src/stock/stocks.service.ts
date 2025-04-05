@@ -196,18 +196,13 @@ export class StocksService {
    * @returns Array of stock quotes ordered by market cap
    */
   async getTopStocksByMarketCap(): Promise<StockQuote[]> {
-    const latestQuoteDate = await this.stockQuoteRepository
+    const maxDateResult = await this.stockQuoteRepository
       .createQueryBuilder('sq')
       .select('MAX(sq.date)', 'maxDate')
       .getRawOne();
 
-    if (!latestQuoteDate || !latestQuoteDate.maxDate) {
+    if (!maxDateResult || !maxDateResult.maxDate) {
       this.logger.warn('No stock quotes found in the database');
-      return [];
-    }
-
-    if (!this.isLatestMarketDay(new Date(latestQuoteDate.maxDate))) {
-      this.logger.warn('No data available for the latest market day');
       return [];
     }
 
@@ -215,7 +210,7 @@ export class StocksService {
       .createQueryBuilder('sq')
       .innerJoinAndSelect('sq.stock', 's')
       .leftJoinAndSelect('s.company', 'c')
-      .where('sq.date = :date', { date: latestQuoteDate.maxDate })
+      .where('sq.date = :maxDate', { maxDate: maxDateResult.maxDate })
       .andWhere('sq.marketCap > 100000000')
       .andWhere('sq.marketCap IS NOT NULL')
       .andWhere('sq.price > 5')
@@ -321,7 +316,7 @@ export class StocksService {
   }
 
   /**
-   * Search for stocks by ticker symbol or company name
+   * Search for stocks by ticker symbol or company name - Highly optimized version
    * @param query Search query string
    * @returns Array of SearchStockDto objects with matching stocks
    */
@@ -332,74 +327,57 @@ export class StocksService {
 
     const searchTerm = query.trim().toLowerCase();
 
-    const latestQuoteDate = await this.stockQuoteRepository
-      .createQueryBuilder('sq')
-      .select('MAX(sq.date)', 'maxDate')
-      .getRawOne();
-
-    if (!latestQuoteDate || !latestQuoteDate.maxDate) {
-      this.logger.warn('No stock quotes found in the database');
-      return [];
-    }
-
-    const searchResults = await this.stockQuoteRepository
-      .createQueryBuilder('sq')
-      .innerJoinAndSelect('sq.stock', 's')
-      .where('sq.date = :date', { date: latestQuoteDate.maxDate })
-      .andWhere(
-        '(LOWER(s.ticker) LIKE :exactMatch OR ' +
-          'LOWER(s.ticker) LIKE :startsWith OR ' +
-          'LOWER(s.ticker) LIKE :contains OR ' +
-          'LOWER(s.name) LIKE :exactMatch OR ' +
-          'LOWER(s.name) LIKE :startsWith OR ' +
-          'LOWER(s.name) LIKE :contains OR ' +
-          'LOWER(s.name) LIKE :fuzzyMatch1 OR ' +
-          'LOWER(s.name) LIKE :fuzzyMatch2 OR ' +
-          'LOWER(s.name) LIKE :fuzzyMatch3 OR ' +
-          'LOWER(s.name) LIKE :partialWord)',
-        {
-          exactMatch: searchTerm,
-          startsWith: `${searchTerm}%`,
-          contains: `%${searchTerm}%`,
-          fuzzyMatch1: `%${searchTerm.split('').join('%')}%`,
-          fuzzyMatch2: `%${searchTerm.substring(0, Math.ceil(searchTerm.length / 2))}%${searchTerm.substring(Math.ceil(searchTerm.length / 2))}%`,
-          fuzzyMatch3: `%${searchTerm.substring(0, 2)}%${searchTerm.substring(2)}%`,
-          partialWord: `%${searchTerm.split('').join('%')}%`,
+    const searchResults = await this.stockRepository
+      .createQueryBuilder('s')
+      .select([
+        's.ticker as ticker',
+        's.name as name',
+        'q.price as price',
+        'q."changesPercentage" as "changesPercentage"',
+      ])
+      .innerJoin(
+        (qb) => {
+          return qb.from((subQb) => {
+            return subQb
+              .select('DISTINCT ON (sq."stockId") sq.*')
+              .from(StockQuote, 'sq')
+              .orderBy('sq."stockId"')
+              .addOrderBy('sq.date', 'DESC');
+          }, 'q');
         },
+        'q',
+        'q."stockId" = s.id',
       )
+      .where('LOWER(s.ticker) = :exact', { exact: searchTerm })
+      .orWhere('LOWER(s.ticker) LIKE :starts', { starts: `${searchTerm}%` })
+      .orWhere('LOWER(s.name) LIKE :contains', { contains: `%${searchTerm}%` })
       .orderBy(
         'CASE ' +
-          'WHEN LOWER(s.ticker) = :exactTicker THEN 0 ' +
-          'WHEN LOWER(s.ticker) LIKE :startTicker THEN 1 ' +
-          'WHEN LOWER(s.name) = :exactName THEN 2 ' +
-          'WHEN LOWER(s.name) LIKE :startName THEN 3 ' +
-          'WHEN LOWER(s.ticker) LIKE :containsTicker THEN 4 ' +
-          'WHEN LOWER(s.name) LIKE :containsName THEN 5 ' +
-          'WHEN LOWER(s.name) LIKE :fuzzyName THEN 6 ' +
-          'ELSE 7 END',
+          'WHEN LOWER(s.ticker) = :exact THEN 0 ' +
+          'WHEN LOWER(s.ticker) LIKE :starts THEN 1 ' +
+          'WHEN LOWER(s.name) = :exact THEN 2 ' +
+          'ELSE 3 END',
         'ASC',
       )
       .setParameters({
-        exactTicker: searchTerm,
-        startTicker: `${searchTerm}%`,
-        exactName: searchTerm,
-        startName: `${searchTerm}%`,
-        containsTicker: `%${searchTerm}%`,
-        containsName: `%${searchTerm}%`,
-        fuzzyName: `%${searchTerm.split('').join('%')}%`,
+        exact: searchTerm,
+        starts: `${searchTerm}%`,
+        contains: `%${searchTerm}%`,
       })
       .limit(10)
-      .getMany();
+      .getRawMany();
 
-    return searchResults.map(
-      (quote) =>
-        new SearchStockDto({
-          symbol: quote.stock.ticker,
-          name: quote.stock.name,
-          price: quote.price,
-          changesPercentage: quote.changesPercentage,
-        }),
-    );
+    return searchResults.map((result) => {
+      this.logger.log(
+        `Found ${result.ticker} ${result.name} ${result.price} ${result.changesPercentage}`,
+      );
+      return new SearchStockDto({
+        symbol: result.ticker,
+        name: result.name,
+        price: result.price,
+        changesPercentage: result.changesPercentage,
+      });
+    });
   }
 
   private splitIntoBatches<T>(array: T[], batchSize: number): T[][] {
@@ -787,6 +765,7 @@ export class StocksService {
       .andWhere('sq.avgVolume > 100000')
       .andWhere('sq.change IS NOT NULL')
       .andWhere('sq.changesPercentage IS NOT NULL')
+      .andWhere('sq.changesPercentage < 0') // Only get negative performers
       .orderBy('sq.changesPercentage', 'ASC')
       .limit(10)
       .getMany();

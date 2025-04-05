@@ -7,6 +7,7 @@ import {
   Param,
   Post,
   Query,
+  SetMetadata,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -70,6 +71,7 @@ export class StocksController {
     description: 'Returns a list of stocks matching the search query',
     type: [SearchStockDto],
   })
+  @SetMetadata('no_cache', true)
   async searchStocks(@Query('query') query: string): Promise<SearchStockDto[]> {
     return this.stocksService.searchStocks(query);
   }

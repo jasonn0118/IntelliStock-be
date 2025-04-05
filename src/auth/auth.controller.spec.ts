@@ -81,7 +81,6 @@ describe('AuthController', () => {
     authController = moduleRef.get<AuthController>(AuthController);
     authService = moduleRef.get<AuthService>(AuthService);
 
-    // Mock the getFrontendUrl method to return localhost for tests
     jest
       .spyOn(authController as any, 'getFrontendUrl')
       .mockReturnValue('http://localhost:3001');
@@ -109,7 +108,6 @@ describe('AuthController', () => {
 
       mockAuthService.signUp.mockResolvedValue(mockUserResponse);
 
-      // ✅ Fix: Fully mock the Express Response object
       const res = {
         cookie: jest.fn(),
         status: jest.fn().mockReturnThis(),
@@ -118,10 +116,8 @@ describe('AuthController', () => {
 
       const result = await authController.signUp(dto, res as Response);
 
-      // ✅ Ensure authService.signUp() was called with correct DTO
       expect(authService.signUp).toHaveBeenCalledWith(dto);
 
-      // ✅ Ensure cookie is set correctly
       expect(res.cookie).toHaveBeenCalledWith('access_token', 'mockJwtToken', {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -129,7 +125,6 @@ describe('AuthController', () => {
         path: '/',
       });
 
-      // ✅ Ensure structured response is returned
       expect(result).toEqual({
         message: 'User registered successfully',
         firstName: 'John',
@@ -156,15 +151,12 @@ describe('AuthController', () => {
         json: jest.fn(),
       } as Partial<Response>;
 
-      // ✅ Expect the function to throw UnauthorizedException
       await expect(authController.signUp(dto, res as Response)).rejects.toThrow(
         UnauthorizedException,
       );
 
-      // ✅ Ensure authService.signUp() was called with correct DTO
       expect(authService.signUp).toHaveBeenCalledWith(dto);
 
-      // ✅ Ensure cookie was NOT set due to error
       expect(res.cookie).not.toHaveBeenCalled();
     });
   });
@@ -193,9 +185,9 @@ describe('AuthController', () => {
 
         const res = {
           cookie: jest.fn(),
-        };
+        } as Partial<Response>;
 
-        const result = await authController.signIn(req, dto, res);
+        const result = await authController.signIn(req, dto, res as Response);
 
         expect(authService.loginWithJwt).toHaveBeenCalledWith(mockUser);
 
@@ -227,10 +219,10 @@ describe('AuthController', () => {
         user: mockUser,
       };
 
-      const res = { cookie: jest.fn() }; // Mock response object
-      await expect(authController.signIn(req, dto, res)).rejects.toThrow(
-        'Login failed',
-      );
+      const res = { cookie: jest.fn() } as Partial<Response>; // Mock response object
+      await expect(
+        authController.signIn(req, dto, res as Response),
+      ).rejects.toThrow('Login failed');
       expect(authService.loginWithJwt).toHaveBeenCalledWith(mockUser);
     });
   });
