@@ -28,6 +28,11 @@ export class CustomCacheInterceptor implements NestInterceptor {
       return next.handle();
     }
 
+    const noCache = this.reflector.get('no_cache', context.getHandler());
+    if (noCache) {
+      return next.handle();
+    }
+
     const cacheKey = this.reflector.get('cache_key', context.getHandler());
     const ttl = this.reflector.get('cache_ttl', context.getHandler());
 
